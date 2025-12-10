@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
