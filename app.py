@@ -175,7 +175,7 @@ if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
         # VISUALS
         diff_html = generate_diff_html(bad_doc, fixed_doc)
         
-        github_comment = f"""
+        github_comment = f""
 ### 🤖 Governance Auto-Fix
 **Status:** ❌ Failed Checks (Fixed Automatically)
 
