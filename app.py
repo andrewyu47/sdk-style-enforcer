@@ -36,7 +36,7 @@ class GovernanceEngine:
         self.audit_log = [] 
 
     def audit_content(self, text):
-        time.sleep(0.8) # Slightly faster for better UX
+        time.sleep(1.0)
         self.audit_log = []
         corrections = {}
         
@@ -66,22 +66,27 @@ class GovernanceEngine:
 
         # === MODE 2: NVIDIA OMNIVERSE ===
         elif self.mode == "NVIDIA Omniverse":
+            # Context Logic
             if "Usd.Stage.Open" in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "Critical", "msg": "Context: Manual Open forbidden in Kit."})
                 corrections['Usd.Stage.Open("test.usd")'] = "omni.usd.get_context().get_stage()"
                 corrections['# opens stage manually'] = "# Gets active stage context"
+            # Async Logic
             if "def make_cube" in text and "async" not in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Performance: Main thread blocking. Added async."})
                 corrections["def make_cube():"] = "async def make_cube():"
+            # Style
             if "cube is created" in text:
                 self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Voice: Passive voice rewritten."})
                 corrections["# cube is created"] = "# Asynchronously creates cube"
 
         # === MODE 3: STANDARD PYTHON ===
         elif self.mode == "Standard Python (PEP8)":
+            # Type Hints
             if "def process(x, y)" in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "Quality: Missing Type Hints."})
                 corrections["def process(x, y):"] = "def process_data(data: list, multiplier: int) -> list:"
+            # Docstrings
             if "data is processed" in text:
                 self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Docs: Missing Docstring."})
                 corrections["# data is processed"] = '"""Processes data list safely."""'
@@ -97,7 +102,7 @@ class GovernanceEngine:
 # --- 2. FILE HANDLERS & VISUALS ---
 @st.cache_resource
 def load_pdf_guide(file):
-    return 12
+    return 12 
 
 def render_diff(original, modified):
     d = difflib.Differ()
@@ -120,7 +125,13 @@ def render_github_preview(audit_log, fixed_text):
     for item in audit_log:
         icon = "🔴" if item['severity'] == "Critical" else "⚠️"
         rows += f"| {icon} **{item['type']}** | {item['msg']} |\n"
-    return f"### 🛡️ Governance Check\n**Status:** Failed (Auto-Fixed)\n\n| Type | Finding |\n| :--- | :--- |\n{rows}\n```python\n{fixed_text[:200]}...\n```"
+    # Safe string construction
+    md = "### 🛡️ Governance Check\n"
+    md += "**Status:** Failed (Auto-Fixed)\n\n"
+    md += "| Type | Finding |\n| :--- | :--- |\n"
+    md += rows
+    md += "\n```python\n" + fixed_text[:200] + "...\n```"
+    return md
 
 # --- UI LAYOUT ---
 
@@ -200,35 +211,33 @@ else:
     )
 
 # --- LAYOUT: INPUT SECTION ---
-# We use columns to keep the input side-by-side with the "Run" button meta-data
 col1, col2 = st.columns([3, 1])
 
 with col1:
     st.subheader("1. Source Draft")
-    # key=mode ensures the text box refreshes when you change the dropdown
     doc_input = st.text_area("Paste Draft:", value=default_text, height=350, key=mode)
 
 with col2:
-    st.subheader("Protocol")
-    st.info("Ready to Audit")
+    st.subheader("Active Protocols")
+    st.info("System Ready")
     
-    # Contextual info based on mode
+    # DYNAMIC PROTOCOL DISPLAY (Now includes Style Source)
+    style_source = f"**{uploaded_file.name}**" if uploaded_file else "Standard Rules"
+    
     if mode == "Splunk Enterprise":
-        st.markdown("* 🔍 **Facts:** Port 8089, Version Lifecycle\n* 🔐 **Security:** Token Auth Only")
+        st.markdown(f"* 🔍 **Facts:** Port 8089, Version Lifecycle\n* 🔐 **Security:** Token Auth Only\n* 🎨 **Style:** {style_source}")
     elif mode == "NVIDIA Omniverse":
-        st.markdown("* 🔍 **Context:** No Manual Stage Open\n* ⚡ **Perf:** Async Execution Required")
+        st.markdown(f"* 🔍 **Context:** No Manual Stage Open\n* ⚡ **Perf:** Async Execution Required\n* 🎨 **Style:** {style_source}")
     else:
-        st.markdown("* 🔍 **Quality:** PEP8 Standards\n* 📝 **Docs:** Mandatory Docstrings")
+        st.markdown(f"* 🔍 **Quality:** PEP8 Standards\n* 📝 **Docs:** Mandatory Docstrings\n* 🎨 **Style:** {style_source}")
     
     st.markdown("---")
-    # THE BUTTON
     if st.button("🚀 Run Audit", type="primary", use_container_width=True):
         st.session_state.run_audit = True
 
-# --- LAYOUT: RESULTS SECTION (Appears Automatically) ---
+# --- LAYOUT: RESULTS SECTION ---
 if st.session_state.get("run_audit"):
-    
-    st.divider() # Visual separation
+    st.divider()
     st.header("2. Audit Results")
     
     engine = GovernanceEngine(mode)
@@ -236,7 +245,6 @@ if st.session_state.get("run_audit"):
         fixed_text = engine.audit_content(doc_input)
         log = engine.audit_log
     
-    # Results Layout
     r1, r2 = st.columns([3, 2])
     
     with r1:
