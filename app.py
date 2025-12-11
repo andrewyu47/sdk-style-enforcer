@@ -136,7 +136,7 @@ if run_btn and code_input:
         with col2:
             st.subheader("2. Output: Compliant Code")
             st.markdown(response.content)
-            st.success("✅ Governance Checks Passed")
+            st.success("✅ Standards Enforced & Code Refactored")
             
     except Exception as e:
         st.error(f"An error occurred: {e}")
