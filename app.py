@@ -1,93 +1,142 @@
 import streamlit as st
 import os
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(
-    page_title="SDK Style Enforcer",
-    page_icon="🛡️",
-    layout="wide"
-)
+st.set_page_config(page_title="SDK Style Enforcer", page_icon="🛡️", layout="wide")
 
-# --- SIDEBAR (Configuration) ---
+# --- SIDEBAR CONFIGURATION (Restored UI) ---
 with st.sidebar:
     st.header("⚙️ Configuration")
     
-    # 1. API Key Input
+    # 1. API Key
     api_key = st.text_input("OpenAI API Key", type="password")
-    if not api_key:
-        st.warning("⚠️ Please enter your OpenAI API Key to proceed.")
-        st.stop()
-    
-    # 2. Select Style Guide
-    style_guide = st.selectbox(
+
+    # 2. Select Enforcement Standard (Dropdown)
+    mode = st.selectbox(
         "Select Enforcement Standard",
-        ["Google Python Style Guide", "NVIDIA Omniverse Extension Style", "PEP 8 Standard"]
+        [
+            "Standard Python (PEP8)", 
+            "Splunk Enterprise (PDF RAG)", 
+            "NVIDIA Omniverse (USD/Kit)"
+        ]
     )
+
+    # 3. Select Model (Dropdown)
+    model_choice = st.selectbox("Select Model", ["gpt-4", "gpt-3.5-turbo"])
     
-    # 3. Model Selection
-    model_choice = st.selectbox("Select Model", ["gpt-3.5-turbo", "gpt-4"])
-    
+    # 4. PDF Status Check
+    st.markdown("---")
+    st.markdown("### 📚 Knowledge Base")
+    pdf_path = "splunk_style_guide.pdf"
+    if os.path.exists(pdf_path):
+        st.success(f"✅ Loaded: {pdf_path}")
+    else:
+        st.error(f"❌ Missing: {pdf_path}")
+
+    # 5. About Section
     st.markdown("---")
     st.markdown("**About this Tool**")
     st.markdown("This tool uses GenAI to act as a 'Linter-as-a-Service', refactoring messy code to meet strict developer ecosystem standards.")
 
+# --- PDF LOADER FUNCTION ---
+@st.cache_resource
+def get_splunk_rules(file_path):
+    try:
+        loader = PyPDFLoader(file_path)
+        pages = loader.load_and_split()
+        full_text = "\n".join([p.page_content for p in pages])
+        return full_text
+    except Exception as e:
+        return None
+
 # --- MAIN APP UI ---
 st.title("🛡️ SDK Style Enforcer")
-st.markdown(f"**Current Mode:** `{style_guide}`")
+st.markdown("**Automated Governance for Developer Ecosystems.**")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("1. Input: Messy Code")
-    # A default "messy" example for testing
-    default_code = """def calc(x,y):
-    # doing math
-    z = x * y
-    print(z)
-    return z"""
+    st.subheader("1. Input: Messy SDK Code")
+    default_code = """def create_red_cube():
+    # this function makes a red cube
+    # data will be loaded from the stage
+    stage = Usd.Stage.Open("test.usd")
+    return True"""
     
-    code_input = st.text_area("Paste undocumented/messy Python here:", value=default_code, height=400)
-    
-    analyze_btn = st.button("🚀 Enforce Standards", type="primary")
+    code_input = st.text_area("Paste Python Code:", value=default_code, height=400)
+    run_btn = st.button("🚀 Enforce Governance", type="primary")
 
-# --- AI LOGIC ---
-if analyze_btn and code_input:
-    # Set the Key
-    os.environ["OPENAI_API_KEY"] = api_key
+# --- AI LOGIC ENGINE ---
+if run_btn and code_input:
     
-    # Define the Prompt (The "DevRel" Secret Sauce)
-    template = """
-    You are a Senior Staff Engineer and Developer Advocate at a major tech company.
-    Your goal is to refactor the user's code to strictly follow the '{style}' standard.
+    if not api_key:
+        st.error("⚠️ Please enter your OpenAI API Key in the sidebar first!")
+        st.stop()
+        
+    system_instruction = ""
     
-    INSTRUCTIONS:
-    1. REFACTOR the code to add Type Hints (typing module).
-    2. ADD a Google-Style Docstring explaining args and returns.
-    3. IMPROVE variable names to be semantic (e.g., change 'x' to 'price').
-    4. GENERATE a Markdown explanation of what you changed and why.
+    # LOGIC FOR SPLUNK (RAG)
+    if mode == "Splunk Enterprise (PDF RAG)":
+        with st.spinner("📖 Ingesting Splunk Style Guide PDF..."):
+            rules_context = get_splunk_rules(pdf_path)
+            if not rules_context:
+                st.error(f"Could not read {pdf_path}. Check file name.")
+                st.stop()
+                
+        system_instruction = f"""
+        You are the Chief Architect for the Splunk SDK.
+        YOUR KNOWLEDGE BASE (OFFICIAL SPLUNK STYLE GUIDE):
+        {rules_context}
+        
+        YOUR TASK:
+        Refactor the user's code to satisfy:
+        1. **Google Python Style:** Add Type Hints & Semantic Variables.
+        2. **Splunk Content Style:** Enforce Active Voice and Present Tense from the PDF.
+        """
 
-    INPUT CODE:
-    {code}
+    # LOGIC FOR NVIDIA (EXPERT SYSTEM)
+    elif mode == "NVIDIA Omniverse (USD/Kit)":
+        system_instruction = """
+        You are a Senior Developer Relations Engineer for NVIDIA Omniverse.
+        
+        YOUR TASK:
+        Refactor code to follow **NVIDIA Kit Extension** standards.
+        
+        RULES:
+        1. **USD Context:** Use `omni.usd.get_context()` instead of opening stages manually.
+        2. **Async:** Use `async def` for UI safety.
+        3. **Types:** Use `pxr.Usd` and `pxr.Sdf` types.
+        """
 
-    OUTPUT FORMAT:
-    [Provide the Refactored Python Code inside a code block]
-    [Provide the "Why I Changed This" explanation in Markdown below it]
-    """
-    
-    # Initialize the Chain
-    llm = ChatOpenAI(model_name=model_choice, temperature=0)
-    prompt = PromptTemplate(template=template, input_variables=["style", "code"])
-    
-    with st.spinner("🤖 AI is reviewing and refactoring..."):
-        # Run the prompt
-        formatted_prompt = prompt.format(style=style_guide, code=code_input)
-        response = llm.invoke(formatted_prompt)
-        result_text = response.content
+    # LOGIC FOR STANDARD
+    else:
+        system_instruction = "Refactor this code to standard PEP8 Python guidelines with Type Hints."
 
-    # --- DISPLAY RESULTS ---
-    with col2:
-        st.subheader("2. Output: Standardized Code")
-        st.markdown(result_text)
-        st.success("✅ Compliance Check Complete")
+    # RUN THE LLM
+    try:
+        # We now use 'model_choice' from the sidebar
+        llm = ChatOpenAI(
+            model_name=model_choice, 
+            temperature=0, 
+            openai_api_key=api_key
+        )
+        
+        prompt_template = PromptTemplate(
+            template="{instruction}\n\nUSER CODE:\n{code}",
+            input_variables=["instruction", "code"]
+        )
+        
+        with st.spinner("🤖 Refactoring..."):
+            final_prompt = prompt_template.format(instruction=system_instruction, code=code_input)
+            response = llm.invoke(final_prompt)
+            
+        with col2:
+            st.subheader("2. Output: Compliant Code")
+            st.markdown(response.content)
+            st.success("✅ Governance Checks Passed")
+            
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
