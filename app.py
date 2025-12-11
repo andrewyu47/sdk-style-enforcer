@@ -188,3 +188,15 @@ if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
 **Suggested Change:**
 ```python
 {fixed_doc}
+"""
+st.write("---")
+    tab1, tab2 = st.tabs(["👀 Manager View (Visual Diff)", "🤖 CI/CD Bot View (GitHub)"])
+    
+    with tab1:
+        st.markdown(diff_html, unsafe_allow_html=True)
+        
+    with tab2:
+        st.info("Simulated Pull Request Comment:")
+        st.markdown(github_comment)
+
+    st.session_state.messages.append({"role": "assistant", "content": "Audit Complete."})
