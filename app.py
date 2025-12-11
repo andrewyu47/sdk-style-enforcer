@@ -151,11 +151,16 @@ with st.sidebar:
     st.header("⚖️ Governance Agent")
     api_key = st.text_input("OpenAI API Key", type="password")
     
-    # 3 MODES NOW AVAILABLE
+# --- HELPER TO RESET CHAT ON MODE CHANGE ---
+    def reset_conversation():
+        st.session_state.messages = []
+
+    # 3 MODES NOW AVAILABLE (With Reset Trigger)
     st.markdown("### 🔌 Logic Engine (MCP)")
     ecosystem_mode = st.selectbox(
         "Select Ecosystem", 
-        ["Google Cloud", "NVIDIA Omniverse", "Standard Python (PEP8)"]
+        ["Google Cloud", "NVIDIA Omniverse", "Standard Python (PEP8)"],
+        on_change=reset_conversation  # <--- THIS IS THE FIX
     )
     
     # Dynamic Status Indicators
