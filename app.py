@@ -4,123 +4,172 @@ import difflib
 from langchain_community.document_loaders import PyPDFLoader
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="DocOps Governance Workbench", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Splunk DocOps Workbench", page_icon="🛡️", layout="wide")
 
-# --- CSS FOR DIFF VIEW ---
+# --- CUSTOM STYLING (High Contrast) ---
 st.markdown("""
 <style>
-.diff-container {
-    max-height: 400px;
-    overflow-y: auto;
+/* Main Container */
+.main { background-color: #0E1117; }
+
+/* Diff Container */
+.diff-box {
     border: 1px solid #30363d;
     border-radius: 6px;
     background-color: #0d1117;
     font-family: 'SFMono-Regular', Consolas, monospace;
     font-size: 13px;
-    padding: 10px;
+    padding: 15px;
     white-space: pre-wrap;
+    line-height: 1.6;
 }
-.diff-added { background-color: rgba(46, 160, 67, 0.15); color: #3fb950; display: block; }
-.diff-removed { background-color: rgba(248, 81, 73, 0.15); color: #ff7b72; display: block; text-decoration: line-through; }
+.diff-added { background-color: rgba(46, 160, 67, 0.2); color: #3fb950; display: inline; }
+.diff-removed { background-color: rgba(248, 81, 73, 0.2); color: #ff7b72; text-decoration: line-through; display: inline; }
+
+/* Audit Log Table */
+.audit-row {
+    padding: 8px;
+    border-bottom: 1px solid #30363d;
+    font-size: 14px;
+}
+.tag-logic { background-color: #7ee787; color: #000; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+.tag-style { background-color: #a5d6ff; color: #000; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+.tag-security { background-color: #ff7b72; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. MOCK MCP SERVER (Truth Engine) ---
-class MCPServer:
-    def __init__(self, ecosystem):
-        self.ecosystem = ecosystem
+# --- 1. THE GOVERNANCE ENGINE (The Brain) ---
+class GovernanceEngine:
+    def __init__(self):
+        self.audit_log = [] # Stores structured data for the report
 
-    def validate_content(self, text_content):
+    def audit_content(self, text):
         """
-        Validates both CODE logic and TEXT facts.
+        Scans text for Logic, Security, and Style violations based on Splunk standards.
         """
-        time.sleep(1.0)
-        errors = []
+        time.sleep(1.5) # Simulate processing time
+        self.audit_log = [] # Reset log
+        corrections = {}
         
-        # SPLUNK SPECIFIC CHECKS
-        if self.ecosystem == "Splunk Enterprise":
-            # Fact Check: Port Numbers
-            if "port 80 " in text_content or "port=80" in text_content:
-                errors.append("❌ **Factual Error (MCP):** Docs claim port 80. Splunk Management Port is actually `8089`.")
+        # --- A. LOGIC & FACTS (Splunk Knowledge Graph) ---
+        
+        # 1. Version Check (Lifecycle)
+        if "version 1.3.0" in text:
+            self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Version 1.3.0 is End-of-Life. Updated to GA 1.4.2."})
+            corrections["version 1.3.0"] = "version 1.4.2"
+
+        # 2. Date/Region Check (Roadmap)
+        if "October 15, 2025" in text:
+            self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "AWS Mumbai launch pulled forward to June 2025."})
+            corrections["October 15, 2025"] = "June 15, 2025"
             
-            # Fact Check: Pricing/Tiers
-            if "Free Tier" in text_content:
-                errors.append("❌ **Factual Error (MCP):** Token Auth is an Enterprise-only feature. Removed 'Free Tier' claim.")
+        # 3. Port Numbers (Technical Accuracy)
+        if "port=80" in text or "port 80" in text:
+             self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Incorrect Port. Splunk Management uses 8089."})
+             corrections["port=80"] = "port=8089"
+             corrections["port 80"] = "port 8089"
 
-            # Code Logic: Deprecated Auth
-            if "username=" in text_content:
-                errors.append("⚠️ **Security Violation (MCP):** Basic Auth is deprecated. Code updated to use `splunk_token`.")
+        # --- B. SECURITY PROTOCOLS ---
         
-        # NVIDIA SPECIFIC CHECKS
-        elif self.ecosystem == "NVIDIA Omniverse":
-            if "synchronous" in text_content.lower():
-                errors.append("❌ **Factual Error (MCP):** Omniverse Kit is async-first. Docs falsely claim synchronous behavior.")
-            if "Usd.Stage.Open" in text_content:
-                errors.append("❌ **Context Violation (MCP):** Manual stage opening detected. Use `get_context()`.")
-                
-        return errors
+        # 1. Deprecated Auth (Basic Auth)
+        if "username=" in text or "password=" in text:
+            self.audit_log.append({"type": "SECURITY", "severity": "Critical", "msg": "Basic Auth is deprecated. Refactored to Token Auth."})
+            # Clean up the specific basic auth lines found in your example
+            corrections["username='admin',"] = "splunk_token=os.environ['SPLUNK_TOKEN']"
+            corrections["password='changeme'"] = ""
+            corrections["username="] = "# Auth updated to Token" # Cleanup for general cases
 
-# --- 2. STYLE ENGINE (RAG) ---
+        # --- C. STYLE & VOICE (RAG) ---
+        
+        # 1. Passive Voice (Brand)
+        if "Data is not sent" in text:
+            self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Passive voice detected. Rewritten to Active Voice."})
+            corrections["Data is not sent to third-party LLM service providers"] = "Splunk does not send data to third-party LLM service providers"
+            
+        if "connection is established" in text:
+            self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Passive voice detected in comments."})
+            corrections["# connection is established"] = "# Connects to the Splunk instance"
+
+        return self._apply_fixes(text, corrections)
+
+    def _apply_fixes(self, text, corrections):
+        fixed_text = text
+        for old, new in corrections.items():
+            fixed_text = fixed_text.replace(old, new)
+        return fixed_text
+
+# --- 2. FILE HANDLERS ---
 @st.cache_resource
-def load_style_guide(uploaded_file):
-    try:
-        with open("temp_style.pdf", "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        loader = PyPDFLoader("temp_style.pdf")
-        pages = loader.load_and_split()
-        return True, len(pages)
-    except:
-        return False, 0
+def load_pdf_guide(file):
+    with open("temp_guide.pdf", "wb") as f:
+        f.write(file.getbuffer())
+    loader = PyPDFLoader("temp_guide.pdf")
+    pages = loader.load_and_split()
+    return len(pages)
 
-# --- DIFF GENERATOR ---
-def generate_diff_html(original, refactored):
+# --- 3. VISUALIZATIONS ---
+def render_diff(original, modified):
     d = difflib.Differ()
-    diff = list(d.compare(original.splitlines(), refactored.splitlines()))
-    html = ['<div class="diff-container">']
+    diff = list(d.compare(original.splitlines(), modified.splitlines()))
+    html = ['<div class="diff-box">']
     for line in diff:
         if line.startswith('+ '):
-            html.append(f'<span class="diff-added">{line}</span>')
+            html.append(f'<span class="diff-added">{line}</span><br>')
         elif line.startswith('- '):
-            html.append(f'<span class="diff-removed">{line}</span>')
+            html.append(f'<span class="diff-removed">{line}</span><br>')
         elif line.startswith('? '):
             continue
         else:
-            html.append(f'<span>{line}</span>')
+            html.append(f'<span>{line}</span><br>')
     html.append('</div>')
-    return "\n".join(html)
+    return "".join(html)
 
-# --- SIDEBAR ---
+def render_github_preview(audit_log, fixed_text):
+    rows = ""
+    for item in audit_log:
+        icon = "🔴" if item['severity'] == "Critical" else "⚠️"
+        rows += f"| {icon} **{item['type']}** | {item['msg']} |\n"
+    
+    # We use a standard string here to avoid f-string syntax errors
+    md = "### 🛡️ DocOps Automated Review\n"
+    md += "**Status:** Changes Requested (Auto-Fixes Available)\n\n"
+    md += "| Category | Finding |\n| :--- | :--- |\n"
+    md += rows
+    md += "\n**Suggested Refactor:**\n```text\n"
+    md += fixed_text[:300] + "... (truncated)\n```\n"
+    md += "*Generated by Splunk DocOps Action*"
+    return md
+
+# --- UI LAYOUT ---
+
+# SIDEBAR
 with st.sidebar:
-    st.header("🛡️ DocOps Config")
-    api_key = st.text_input("OpenAI API Key", type="password")
+    st.image("https://upload.wikimedia.org/wikipedia/commons/2/23/Splunk_logo.png", width=150)
+    st.header("DocOps Config")
     
-    st.markdown("### 🔌 Logic Engine (MCP)")
-    ecosystem = st.selectbox("Target Ecosystem", ["Splunk Enterprise", "NVIDIA Omniverse"])
+    st.subheader("1. Knowledge Sources")
+    st.success("✅ Splunk API Spec (v9.0)")
+    st.success("✅ Product Lifecycle Graph")
     
-    if ecosystem == "Splunk Enterprise":
-        st.success("✅ `mcp-server-splunk-api` Active")
-        st.success("✅ `mcp-server-product-catalog` Active")
-    else:
-        st.success("✅ `mcp-server-omniverse` Active")
-
-    st.markdown("### 🎨 Style Engine (RAG)")
+    st.subheader("2. Style Governance")
     uploaded_file = st.file_uploader("Upload Style Guide (PDF)", type="pdf")
     if uploaded_file:
-        success, pages = load_style_guide(uploaded_file)
-        if success:
-            st.success(f"✅ Loaded {pages} pages of Rules")
-
+        pages = load_pdf_guide(uploaded_file)
+        st.success(f"✅ Indexed {pages} pages of rules")
+        
     st.divider()
-    st.info("**Mission:** Fix Broken Code and Incorrect Facts.")
+    st.caption("System Status: **Active**")
 
-# --- MAIN UI ---
-st.title("🛡️ DocOps Governance Workbench")
-st.markdown("Unified governance for Developer Documentation. Validates against **Platform Reality** (Facts) and **Style Standards** (Voice).")
+# MAIN PAGE
+st.title("🛡️ Splunk DocOps Governance Workbench")
+st.markdown("Automated governance for Documentation & SDK Examples. Enforces **Factual Accuracy**, **Security Best Practices**, and **Brand Voice**.")
 
-# BAD DOCUMENTATION EXAMPLES (Markdown + Code)
-bad_doc_splunk = """### Connecting to Splunk
-You can use this function on the Free Tier.
-It connects to the standard web port 80.
+# TABS FOR MODES
+tab_input, tab_results = st.tabs(["📝 Input Draft", "📊 Audit Results"])
+
+# DEFAULT TEXT (Combined Text + Code)
+default_text = """### Connecting to Splunk
+You can use this function to connect to port 80.
 
 ```python
 def connect():
@@ -131,90 +180,3 @@ def connect():
         username='admin', 
         password='changeme'
     )
-```"""
-
-bad_doc_nvidia = """### Creating a Cube
-This function runs in a synchronous blocking mode.
-
-```python
-def make_cube():
-    # cube is created
-    stage = Usd.Stage.Open("test.usd")
-    return stage.DefinePrim("/Cube", "Cube")
-```"""
-
-default_text = bad_doc_splunk if ecosystem == "Splunk Enterprise" else bad_doc_nvidia
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("1. Input (Draft Docs)")
-    doc_input = st.text_area("Paste Documentation Snippet:", value=default_text, height=400)
-    run_btn = st.button("🚀 Run Fact & Style Audit", type="primary", use_container_width=True)
-
-if run_btn:
-    if not api_key:
-        st.error("⚠️ Please enter OpenAI API Key in sidebar")
-        st.stop()
-        
-    mcp = MCPServer(ecosystem)
-    
-    with st.status("⚙️ Executing Governance Protocols...", expanded=True):
-        st.write(f"🔌 **Logic Engine:** Verifying facts against {ecosystem} Knowledge Graph...")
-        fact_errors = mcp.validate_content(doc_input)
-        
-        if fact_errors:
-            for err in fact_errors:
-                st.write(err)
-        else:
-            st.write("✅ Facts: Verified.")
-            
-        st.write("🎨 **Style Engine:** Analyzing voice...")
-        if uploaded_file:
-            st.write("⚠️ **Style Violation:** Passive voice detected in comments.")
-        else:
-            st.write("⚠️ Using Standard Rules.")
-            
-    # FIXED CONTENT GENERATION
-    fixed_text = ""
-    if ecosystem == "Splunk Enterprise":
-        fixed_text = """### Connecting to Splunk
-This feature requires an Enterprise License.
-It connects to the management port 8089.
-
-```python
-def connect_to_splunk(token: str) -> client.Service:
-    \"\"\"
-    Connects to the Splunk instance using a Bearer Token.
-    \"\"\"
-    # Validated against Splunk Cloud API
-    return client.connect(
-        host='localhost',
-        port=8089,
-        splunk_token=token
-    )
-```"""
-    else:
-        fixed_text = """### Creating a Cube
-This function runs asynchronously to prevent UI blocking.
-
-```python
-import omni.usd
-async def make_cube() -> Usd.Prim:
-    \"\"\"
-    Asynchronously creates a cube primitive.
-    \"\"\"
-    # Validated against Omniverse Context
-    ctx = omni.usd.get_context()
-    return ctx.get_stage().DefinePrim("/Cube", "Cube")
-```"""
-
-    with col2:
-        st.subheader("2. Output (Verified Docs)")
-        st.code(fixed_text, language='markdown')
-        st.success("✅ Audit Passed")
-
-    st.divider()
-    st.subheader("🔍 Governance Diff (Facts + Code)")
-    diff_html = generate_diff_html(doc_input, fixed_text)
-    st.markdown(diff_html, unsafe_allow_html=True)
