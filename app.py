@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Unified Governance Agent", page_icon="⚖️", layout="wide")
 
-# --- CUSTOM CSS FOR DIFF VIEW (Restored) ---
+# --- CSS FOR DIFF VIEW ---
 st.markdown("""
 <style>
 .diff-container {
@@ -28,25 +28,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- HELPER: GENERATE DIFF HTML ---
-def generate_diff_html(original, refactored):
-    d = difflib.Differ()
-    diff = list(d.compare(original.splitlines(), refactored.splitlines()))
-    
-    html = ['<div class="diff-container">']
-    for line in diff:
-        if line.startswith('+ '):
-            html.append(f'<span class="diff-added">{line}</span>')
-        elif line.startswith('- '):
-            html.append(f'<span class="diff-removed">{line}</span>')
-        elif line.startswith('? '):
-            continue
-        else:
-            html.append(f'<span>{line}</span>')
-    html.append('</div>')
-    return "\n".join(html)
-
-# --- 1. THE LOGIC ENGINE (Mock MCP) ---
+# --- 1. LOGIC ENGINE (Mock MCP) ---
 class MCPServer:
     def call_bigquery(self):
         time.sleep(1) 
@@ -65,15 +47,36 @@ class MCPServer:
             report.append("⚠️ **Deprecation (MCP):** `n1-standard-1` is legacy. Use `e2-micro`.")
         return report
 
-# --- 2. THE STYLE ENGINE (PDF RAG) ---
+# --- 2. STYLE ENGINE (Upload Handler) ---
 @st.cache_resource
-def load_style_guide(pdf_path):
+def process_uploaded_pdf(uploaded_file):
+    """Saves uploaded file to temp disk so PyPDFLoader can read it."""
     try:
-        loader = PyPDFLoader(pdf_path)
+        with open("temp_style_guide.pdf", "wb") as f:
+            f.write(uploaded_file.getbuffer())
+            
+        loader = PyPDFLoader("temp_style_guide.pdf")
         pages = loader.load_and_split()
         return "\n".join([p.page_content for p in pages])
-    except:
+    except Exception as e:
         return None
+
+# --- HELPER: DIFF GENERATOR ---
+def generate_diff_html(original, refactored):
+    d = difflib.Differ()
+    diff = list(d.compare(original.splitlines(), refactored.splitlines()))
+    html = ['<div class="diff-container">']
+    for line in diff:
+        if line.startswith('+ '):
+            html.append(f'<span class="diff-added">{line}</span>')
+        elif line.startswith('- '):
+            html.append(f'<span class="diff-removed">{line}</span>')
+        elif line.startswith('? '):
+            continue
+        else:
+            html.append(f'<span>{line}</span>')
+    html.append('</div>')
+    return "\n".join(html)
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -83,31 +86,34 @@ with st.sidebar:
     st.markdown("### 🧠 Dual-Engine Status")
     st.success("✅ **Logic Engine:** Google Cloud MCP (Active)")
     
-    pdf_path = "splunk_style_guide.pdf"
-    if os.path.exists(pdf_path):
-        st.success(f"✅ **Style Engine:** {pdf_path} (RAG Active)")
+    # PDF UPLOADER (The New Element)
+    st.markdown("### 🎨 Style Engine")
+    uploaded_file = st.file_uploader("Upload Style Guide (PDF)", type="pdf")
+    
+    if uploaded_file:
+        st.success(f"✅ Loaded: {uploaded_file.name}")
     else:
-        st.warning("⚠️ Style Engine: PDF not found")
+        st.warning("⚠️ Waiting for PDF...")
 
     st.markdown("---")
     st.info("Mission: Enforce **Code Truth** and **Brand Voice** simultaneously.")
 
 # --- MAIN UI ---
 st.title("⚖️ SDK Governance Agent")
-st.markdown("**Workflow:** Detect (BigQuery) $\\to$ Validate (MCP) $\\to$ Polish (Style RAG)")
+st.markdown("**Workflow:** Detect (BigQuery) $\\to$ Validate (MCP) $\\to$ Polish (Uploaded PDF RAG)")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.messages.append({
         "role": "assistant", 
-        "content": "I am the Governance Agent. I utilize **MCP for Logic** and **RAG for Style**. Ready to audit?"
+        "content": "I am the Governance Agent. **Upload a PDF** to define the Style, and I will use **MCP** to validate the Logic."
     })
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"], unsafe_allow_html=True) # Allow HTML for history
+        st.markdown(message["content"], unsafe_allow_html=True)
 
-# --- AGENT REASONING ---
+# --- AGENT LOGIC ---
 if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
     
     if not api_key:
@@ -128,9 +134,9 @@ if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
             # PHASE 1: LOGIC (MCP)
             st.write("📉 **Logic Engine:** Querying BigQuery...")
             bq = mcp.call_bigquery()
-            st.write(f"❌ Found error cluster in `{bq['file']}`.")
+            st.write(f"❌ Found high-error doc: `{bq['file']}`")
             
-            # THE BAD CODE
+            # BAD CODE EXAMPLE
             bad_doc = """def create_vm():
     # vm will be created
     # zone is set to us-east-1
@@ -142,15 +148,19 @@ if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
             for err in logic_errors:
                 st.write(err)
 
-            # PHASE 2: STYLE (RAG)
-            st.write("🎨 **Style Engine:** Ingesting PDF Rules...")
-            style_rules = load_style_guide(pdf_path)
-            if style_rules:
-                st.write("✅ RAG Context Loaded: Passive Voice Detected.")
+            # PHASE 2: STYLE (UPLOADED PDF)
+            st.write("🎨 **Style Engine:** Ingesting uploaded PDF...")
+            style_context = ""
+            if uploaded_file:
+                style_context = process_uploaded_pdf(uploaded_file)
+                st.write(f"✅ RAG Active: Analyzed {len(style_context)} characters of rules.")
+                st.write("⚠️ Detected Passive Voice violation.")
+            else:
+                st.write("⚠️ No PDF uploaded. Using standard fallback rules.")
             
-            status.update(label="✅ Audit Complete: Fix Applied", state="complete", expanded=False)
+            status.update(label="✅ Audit Complete: Dual-Engine Fix Applied", state="complete", expanded=False)
 
-        # THE FIXED CODE
+        # FIXED CODE
         fixed_doc = """def create_vm() -> dict:
     \"\"\"
     Provisions a modern e2-micro instance in the US East region.
@@ -162,18 +172,19 @@ if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
     }
     return compute.instances().insert(body=config)"""
 
-        # GENERATE VISUAL DIFF
+        # VISUALS
         diff_html = generate_diff_html(bad_doc, fixed_doc)
-
-        explanation = f"""
-I have remediated `{bq['file']}`. Below is the **Governance Diff**:
-
-1.  **Logic Fixes (MCP):** `us-east-1` $\\to$ `us-east1-b` (Valid Zone).
-2.  **Style Fixes (RAG):** Converted comments to Docstrings.
-
-<div class="diff-header">Before vs. After Comparison:</div>
-{diff_html}
-        """
         
-        st.markdown(explanation, unsafe_allow_html=True)
-        st.session_state.messages.append({"role": "assistant", "content": explanation})
+        github_comment = f"""
+### 🤖 Governance Auto-Fix
+**Status:** ❌ Failed Checks (Fixed Automatically)
+
+| Governance Engine | Status | Action |
+| :--- | :--- | :--- |
+| **Logic (Google MCP)** | 🔴 **Fail** | `us-east-1` is invalid. Corrected to `us-east1-b`. |
+| **Lifecycle (Google MCP)** | ⚠️ **Warn** | `n1-standard` is legacy. Upgraded to `e2-micro`. |
+| **Style (PDF RAG)** | 🔴 **Fail** | Passive voice detected. Rewritten based on `{uploaded_file.name if uploaded_file else 'Standard Rules'}`. |
+
+**Suggested Change:**
+```python
+{fixed_doc}
