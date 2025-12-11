@@ -88,7 +88,6 @@ with st.sidebar:
     st.markdown("### 🎨 Style Engine")
     uploaded_file = st.file_uploader("Upload Style Guide (PDF)", type="pdf")
     
-    # --- THIS WAS THE PROBLEM AREA (FIXED) ---
     if uploaded_file:
         st.success(f"✅ Loaded: {uploaded_file.name}")
     else:
@@ -172,31 +171,30 @@ if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
         # VISUALS
         diff_html = generate_diff_html(bad_doc, fixed_doc)
         
-        # --- GENERATE GITHUB COMMENT (FIXED STRING) ---
+        # --- GENERATE GITHUB COMMENT (SAFER METHOD) ---
         pdf_name = uploaded_file.name if uploaded_file else 'Standard Rules'
         
-        github_comment = f"""
-### 🤖 Governance Auto-Fix
-**Status:** ❌ Failed Checks (Fixed Automatically)
-
+        # We build the string in parts to prevent SyntaxErrors
+        header = "### 🤖 Governance Auto-Fix\n**Status:** ❌ Failed Checks (Fixed Automatically)\n"
+        table = f"""
 | Governance Engine | Status | Action |
 | :--- | :--- | :--- |
 | **Logic (Google MCP)** | 🔴 **Fail** | `us-east-1` is invalid. Corrected to `us-east1-b`. |
 | **Lifecycle (Google MCP)** | ⚠️ **Warn** | `n1-standard` is legacy. Upgraded to `e2-micro`. |
 | **Style (PDF RAG)** | 🔴 **Fail** | Passive voice detected. Rewritten based on `{pdf_name}`. |
-
-**Suggested Change:**
-```python
-{fixed_doc}
 """
-st.write("---")
-    tab1, tab2 = st.tabs(["👀 Manager View (Visual Diff)", "🤖 CI/CD Bot View (GitHub)"])
-    
-    with tab1:
-        st.markdown(diff_html, unsafe_allow_html=True)
+        code_block = f"\n**Suggested Change:**\n```python\n{fixed_doc}\n```"
         
-    with tab2:
-        st.info("Simulated Pull Request Comment:")
-        st.markdown(github_comment)
+        github_comment = header + table + code_block
 
-    st.session_state.messages.append({"role": "assistant", "content": "Audit Complete."})
+        st.write("---")
+        tab1, tab2 = st.tabs(["👀 Manager View (Visual Diff)", "🤖 CI/CD Bot View (GitHub)"])
+        
+        with tab1:
+            st.markdown(diff_html, unsafe_allow_html=True)
+            
+        with tab2:
+            st.info("Simulated Pull Request Comment:")
+            st.markdown(github_comment)
+
+        st.session_state.messages.append({"role": "assistant", "content": "Audit Complete."})
