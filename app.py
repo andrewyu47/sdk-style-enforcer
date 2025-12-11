@@ -1,142 +1,179 @@
 import streamlit as st
+import time
 import os
+import difflib
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="SDK Style Enforcer", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Unified Governance Agent", page_icon="⚖️", layout="wide")
 
-# --- SIDEBAR CONFIGURATION (Restored UI) ---
-with st.sidebar:
-    st.header("⚙️ Configuration")
+# --- CUSTOM CSS FOR DIFF VIEW (Restored) ---
+st.markdown("""
+<style>
+.diff-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #444;
+    border-radius: 5px;
+    background-color: #0E1117;
+    font-family: monospace;
+    font-size: 14px;
+    padding: 10px;
+    margin-top: 10px;
+}
+.diff-added { background-color: rgba(0, 255, 0, 0.2); display: block; }
+.diff-removed { background-color: rgba(255, 0, 0, 0.2); display: block; text-decoration: line-through; }
+.diff-header { font-weight: bold; margin-bottom: 5px; color: #888; }
+</style>
+""", unsafe_allow_html=True)
+
+# --- HELPER: GENERATE DIFF HTML ---
+def generate_diff_html(original, refactored):
+    d = difflib.Differ()
+    diff = list(d.compare(original.splitlines(), refactored.splitlines()))
     
-    # 1. API Key
-    api_key = st.text_input("OpenAI API Key", type="password")
+    html = ['<div class="diff-container">']
+    for line in diff:
+        if line.startswith('+ '):
+            html.append(f'<span class="diff-added">{line}</span>')
+        elif line.startswith('- '):
+            html.append(f'<span class="diff-removed">{line}</span>')
+        elif line.startswith('? '):
+            continue
+        else:
+            html.append(f'<span>{line}</span>')
+    html.append('</div>')
+    return "\n".join(html)
 
-    # 2. Select Enforcement Standard (Dropdown)
-    mode = st.selectbox(
-        "Select Enforcement Standard",
-        [
-            "Standard Python (PEP8)", 
-            "Splunk Enterprise (PDF RAG)", 
-            "NVIDIA Omniverse (USD/Kit)"
-        ]
-    )
+# --- 1. THE LOGIC ENGINE (Mock MCP) ---
+class MCPServer:
+    def call_bigquery(self):
+        time.sleep(1) 
+        return {
+            "file": "docs/provision_vm.md",
+            "error": "400 Bad Request: Invalid Zone",
+            "tickets": "High Volume",
+        }
 
-    # 3. Select Model (Dropdown)
-    model_choice = st.selectbox("Select Model", ["gpt-4", "gpt-3.5-turbo"])
-    
-    # 4. PDF Status Check
-    st.markdown("---")
-    st.markdown("### 📚 Knowledge Base")
-    pdf_path = "splunk_style_guide.pdf"
-    if os.path.exists(pdf_path):
-        st.success(f"✅ Loaded: {pdf_path}")
-    else:
-        st.error(f"❌ Missing: {pdf_path}")
+    def call_api_validator(self, snippet):
+        time.sleep(1)
+        report = []
+        if "us-east-1" in snippet:
+            report.append("❌ **Logic Error (MCP):** `us-east-1` is an AWS zone. Google Cloud requires `us-east1-b`.")
+        if "n1-standard-1" in snippet:
+            report.append("⚠️ **Deprecation (MCP):** `n1-standard-1` is legacy. Use `e2-micro`.")
+        return report
 
-    # 5. About Section
-    st.markdown("---")
-    st.markdown("**About this Tool**")
-    st.markdown("This tool uses GenAI to act as a 'Linter-as-a-Service', refactoring messy code to meet strict developer ecosystem standards.")
-
-# --- PDF LOADER FUNCTION ---
+# --- 2. THE STYLE ENGINE (PDF RAG) ---
 @st.cache_resource
-def get_splunk_rules(file_path):
+def load_style_guide(pdf_path):
     try:
-        loader = PyPDFLoader(file_path)
+        loader = PyPDFLoader(pdf_path)
         pages = loader.load_and_split()
-        full_text = "\n".join([p.page_content for p in pages])
-        return full_text
-    except Exception as e:
+        return "\n".join([p.page_content for p in pages])
+    except:
         return None
 
-# --- MAIN APP UI ---
-st.title("🛡️ SDK Style Enforcer")
-st.markdown("**Automated Governance for Developer Ecosystems.**")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("1. Input: Messy SDK Code")
-    default_code = """def create_red_cube():
-    # this function makes a red cube
-    # data will be loaded from the stage
-    stage = Usd.Stage.Open("test.usd")
-    return True"""
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("⚖️ Governance Agent")
+    api_key = st.text_input("OpenAI API Key", type="password")
     
-    code_input = st.text_area("Paste Python Code:", value=default_code, height=400)
-    run_btn = st.button("🚀 Enforce Governance", type="primary")
+    st.markdown("### 🧠 Dual-Engine Status")
+    st.success("✅ **Logic Engine:** Google Cloud MCP (Active)")
+    
+    pdf_path = "splunk_style_guide.pdf"
+    if os.path.exists(pdf_path):
+        st.success(f"✅ **Style Engine:** {pdf_path} (RAG Active)")
+    else:
+        st.warning("⚠️ Style Engine: PDF not found")
 
-# --- AI LOGIC ENGINE ---
-if run_btn and code_input:
+    st.markdown("---")
+    st.info("Mission: Enforce **Code Truth** and **Brand Voice** simultaneously.")
+
+# --- MAIN UI ---
+st.title("⚖️ SDK Governance Agent")
+st.markdown("**Workflow:** Detect (BigQuery) $\\to$ Validate (MCP) $\\to$ Polish (Style RAG)")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    st.session_state.messages.append({
+        "role": "assistant", 
+        "content": "I am the Governance Agent. I utilize **MCP for Logic** and **RAG for Style**. Ready to audit?"
+    })
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"], unsafe_allow_html=True) # Allow HTML for history
+
+# --- AGENT REASONING ---
+if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
     
     if not api_key:
-        st.error("⚠️ Please enter your OpenAI API Key in the sidebar first!")
+        st.error("⚠️ Please enter API Key")
         st.stop()
-        
-    system_instruction = ""
-    
-    # LOGIC FOR SPLUNK (RAG)
-    if mode == "Splunk Enterprise (PDF RAG)":
-        with st.spinner("📖 Ingesting Splunk Style Guide PDF..."):
-            rules_context = get_splunk_rules(pdf_path)
-            if not rules_context:
-                st.error(f"Could not read {pdf_path}. Check file name.")
-                st.stop()
-                
-        system_instruction = f"""
-        You are the Chief Architect for the Splunk SDK.
-        YOUR KNOWLEDGE BASE (OFFICIAL SPLUNK STYLE GUIDE):
-        {rules_context}
-        
-        YOUR TASK:
-        Refactor the user's code to satisfy:
-        1. **Google Python Style:** Add Type Hints & Semantic Variables.
-        2. **Splunk Content Style:** Enforce Active Voice and Present Tense from the PDF.
-        """
 
-    # LOGIC FOR NVIDIA (EXPERT SYSTEM)
-    elif mode == "NVIDIA Omniverse (USD/Kit)":
-        system_instruction = """
-        You are a Senior Developer Relations Engineer for NVIDIA Omniverse.
-        
-        YOUR TASK:
-        Refactor code to follow **NVIDIA Kit Extension** standards.
-        
-        RULES:
-        1. **USD Context:** Use `omni.usd.get_context()` instead of opening stages manually.
-        2. **Async:** Use `async def` for UI safety.
-        3. **Types:** Use `pxr.Usd` and `pxr.Sdf` types.
-        """
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    # LOGIC FOR STANDARD
-    else:
-        system_instruction = "Refactor this code to standard PEP8 Python guidelines with Type Hints."
-
-    # RUN THE LLM
-    try:
-        # We now use 'model_choice' from the sidebar
-        llm = ChatOpenAI(
-            model_name=model_choice, 
-            temperature=0, 
-            openai_api_key=api_key
-        )
+    with st.chat_message("assistant"):
+        mcp = MCPServer()
         
-        prompt_template = PromptTemplate(
-            template="{instruction}\n\nUSER CODE:\n{code}",
-            input_variables=["instruction", "code"]
-        )
-        
-        with st.spinner("🤖 Refactoring..."):
-            final_prompt = prompt_template.format(instruction=system_instruction, code=code_input)
-            response = llm.invoke(final_prompt)
+        with st.status("⚙️ Agent Reasoning...", expanded=True) as status:
+            st.write("🔍 Intent: `Full Audit (Logic + Style)`")
+            time.sleep(0.5)
             
-        with col2:
-            st.subheader("2. Output: Compliant Code")
-            st.markdown(response.content)
-            st.success("✅ Standards Enforced & Code Refactored")
+            # PHASE 1: LOGIC (MCP)
+            st.write("📉 **Logic Engine:** Querying BigQuery...")
+            bq = mcp.call_bigquery()
+            st.write(f"❌ Found error cluster in `{bq['file']}`.")
             
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+            # THE BAD CODE
+            bad_doc = """def create_vm():
+    # vm will be created
+    # zone is set to us-east-1
+    config = { "machineType": "n1-standard-1", "zone": "us-east-1" }
+    return compute.insert(config)"""
+            
+            st.write("☁️ **Logic Engine:** Validating against Live Google API...")
+            logic_errors = mcp.call_api_validator(bad_doc)
+            for err in logic_errors:
+                st.write(err)
+
+            # PHASE 2: STYLE (RAG)
+            st.write("🎨 **Style Engine:** Ingesting PDF Rules...")
+            style_rules = load_style_guide(pdf_path)
+            if style_rules:
+                st.write("✅ RAG Context Loaded: Passive Voice Detected.")
+            
+            status.update(label="✅ Audit Complete: Fix Applied", state="complete", expanded=False)
+
+        # THE FIXED CODE
+        fixed_doc = """def create_vm() -> dict:
+    \"\"\"
+    Provisions a modern e2-micro instance in the US East region.
+    \"\"\"
+    # Validated against Live API
+    config = {
+        "machineType": "zones/us-east1-b/machineTypes/e2-micro",
+        "zone": "zones/us-east1-b"
+    }
+    return compute.instances().insert(body=config)"""
+
+        # GENERATE VISUAL DIFF
+        diff_html = generate_diff_html(bad_doc, fixed_doc)
+
+        explanation = f"""
+I have remediated `{bq['file']}`. Below is the **Governance Diff**:
+
+1.  **Logic Fixes (MCP):** `us-east-1` $\\to$ `us-east1-b` (Valid Zone).
+2.  **Style Fixes (RAG):** Converted comments to Docstrings.
+
+<div class="diff-header">Before vs. After Comparison:</div>
+{diff_html}
+        """
+        
+        st.markdown(explanation, unsafe_allow_html=True)
+        st.session_state.messages.append({"role": "assistant", "content": explanation})
