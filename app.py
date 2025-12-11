@@ -151,16 +151,16 @@ with st.sidebar:
     st.header("⚖️ Governance Agent")
     api_key = st.text_input("OpenAI API Key", type="password")
     
-# --- HELPER TO RESET CHAT ON MODE CHANGE ---
+    # CALLBACK: Clears chat when you switch modes
     def reset_conversation():
         st.session_state.messages = []
 
-    # 3 MODES NOW AVAILABLE (With Reset Trigger)
+    # 3 MODES NOW AVAILABLE
     st.markdown("### 🔌 Logic Engine (MCP)")
     ecosystem_mode = st.selectbox(
         "Select Ecosystem", 
         ["Google Cloud", "NVIDIA Omniverse", "Standard Python (PEP8)"],
-        on_change=reset_conversation  # <--- THIS IS THE FIX
+        on_change=reset_conversation 
     )
     
     # Dynamic Status Indicators
@@ -169,6 +169,7 @@ with st.sidebar:
         st.success("✅ `mcp-server-compute` (Active)")
     elif ecosystem_mode == "NVIDIA Omniverse":
         st.success("✅ `mcp-server-omniverse` (Active)")
+        st.success("✅ `mcp-server-usd` (Active)")
     else:
         st.success("✅ `flake8-linter` (Active)")
         st.success("✅ `mypy-type-checker` (Active)")
@@ -188,11 +189,17 @@ with st.sidebar:
 st.title(f"⚖️ {ecosystem_mode} Governance Agent")
 st.markdown("**Workflow:** Detect (Analytics) $\\to$ Validate (MCP) $\\to$ Polish (Uploaded PDF RAG)")
 
-if "messages" not in st.session_state:
+# --- FIXED INITIALIZATION LOGIC ---
+# This checks if the list is missing OR empty
+if "messages" not in st.session_state or len(st.session_state.messages) == 0:
     st.session_state.messages = []
+    
+    # We use "Environment" or "MCP" to be safe/accurate
+    tech_name = f"{ecosystem_mode} Environment"
+    
     st.session_state.messages.append({
         "role": "assistant", 
-        "content": f"I am connected to the **{ecosystem_mode} Mesh**. Ready to audit?"
+        "content": f"I am connected to the **{tech_name}**. Ready to audit?"
     })
 
 for message in st.session_state.messages:
