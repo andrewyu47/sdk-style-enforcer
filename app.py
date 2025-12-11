@@ -3,7 +3,6 @@ import time
 import os
 import difflib
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_openai import ChatOpenAI
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Unified Governance Agent", page_icon="⚖️", layout="wide")
@@ -27,37 +26,107 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. LOGIC ENGINE (Mock MCP) ---
-class MCPServer:
-    def call_bigquery(self):
-        time.sleep(1) 
-        return {
-            "file": "docs/provision_vm.md",
-            "error": "400 Bad Request: Invalid Zone",
-            "tickets": "High Volume",
-        }
+# --- 1. THE LOGIC ENGINE (Mock MCP Router) ---
+class MCPRouter:
+    def __init__(self, mode):
+        self.mode = mode
 
-    def call_api_validator(self, snippet):
+    def detect_issues(self):
+        time.sleep(1)
+        
+        if self.mode == "Google Cloud":
+            return {
+                "file": "docs/provision_vm.md",
+                "error": "400 Bad Request: Invalid Zone",
+                "bad_code": """def create_vm():
+    # vm will be created
+    # zone is set to us-east-1
+    config = { "machineType": "n1-standard-1", "zone": "us-east-1" }
+    return compute.insert(config)"""
+            }
+            
+        elif self.mode == "NVIDIA Omniverse":
+            return {
+                "file": "exts/create_prop.py",
+                "error": "RuntimeError: Stage Not Found",
+                "bad_code": """def create_cube():
+    # cube will be created
+    # stage is opened manually
+    stage = Usd.Stage.Open("test.usd")
+    return stage.DefinePrim("/Cube", "Cube")"""
+            }
+            
+        else: # Standard Python (The Restored Mode)
+            return {
+                "file": "utils/data_processor.py",
+                "error": "PEP8 Violation: Missing Type Hints & Docstrings",
+                "bad_code": """def process(x, y):
+    # data is processed here
+    # result is returned
+    z = x * y
+    return z"""
+            }
+
+    def validate_and_fix(self, bad_code):
         time.sleep(1)
         report = []
-        if "us-east-1" in snippet:
+        fixed_code = ""
+
+        if self.mode == "Google Cloud":
             report.append("❌ **Logic Error (MCP):** `us-east-1` is an AWS zone. Google Cloud requires `us-east1-b`.")
-        if "n1-standard-1" in snippet:
             report.append("⚠️ **Deprecation (MCP):** `n1-standard-1` is legacy. Use `e2-micro`.")
-        return report
+            fixed_code = """def create_vm() -> dict:
+    \"\"\"
+    Provisions a modern e2-micro instance in the US East region.
+    \"\"\"
+    # Validated against Live API
+    config = {
+        "machineType": "zones/us-east1-b/machineTypes/e2-micro",
+        "zone": "zones/us-east1-b"
+    }
+    return compute.instances().insert(body=config)"""
+
+        elif self.mode == "NVIDIA Omniverse":
+            report.append("❌ **Context Error (MCP):** Do not open stages manually. Use `omni.usd.get_context()`.")
+            fixed_code = """import omni.usd
+from pxr import Usd, UsdGeom
+
+async def create_cube() -> Usd.Prim:
+    \"\"\"
+    Asynchronously creates a cube primitive in the active stage.
+    \"\"\"
+    # Validated against Omniverse Kit
+    ctx = omni.usd.get_context()
+    stage = ctx.get_stage()
+    return stage.DefinePrim("/Cube", "Cube")"""
+            
+        else: # Standard Python Fixes
+            report.append("❌ **PEP8 Error:** Missing Type Hints for arguments and return value.")
+            report.append("⚠️ **Naming Convention:** Variables `x, y, z` are non-semantic.")
+            fixed_code = """def process_data(input_val: int, multiplier: int) -> int:
+    \"\"\"
+    Multiplies the input value by the multiplier.
+    
+    Args:
+        input_val (int): The primary data input.
+        multiplier (int): The factor to multiply by.
+    \"\"\"
+    # Refactored for Type Safety
+    result = input_val * multiplier
+    return result"""
+            
+        return report, fixed_code
 
 # --- 2. STYLE ENGINE (Upload Handler) ---
 @st.cache_resource
 def process_uploaded_pdf(uploaded_file):
     try:
-        # Create temp file safely
         with open("temp_style_guide.pdf", "wb") as f:
             f.write(uploaded_file.getbuffer())
-            
         loader = PyPDFLoader("temp_style_guide.pdf")
         pages = loader.load_and_split()
         return "\n".join([p.page_content for p in pages])
-    except Exception as e:
+    except:
         return None
 
 # --- HELPER: DIFF GENERATOR ---
@@ -82,10 +151,24 @@ with st.sidebar:
     st.header("⚖️ Governance Agent")
     api_key = st.text_input("OpenAI API Key", type="password")
     
-    st.markdown("### 🧠 Dual-Engine Status")
-    st.success("✅ **Logic Engine:** Google Cloud MCP (Active)")
+    # 3 MODES NOW AVAILABLE
+    st.markdown("### 🔌 Logic Engine (MCP)")
+    ecosystem_mode = st.selectbox(
+        "Select Ecosystem", 
+        ["Google Cloud", "NVIDIA Omniverse", "Standard Python (PEP8)"]
+    )
     
-    st.markdown("### 🎨 Style Engine")
+    # Dynamic Status Indicators
+    if ecosystem_mode == "Google Cloud":
+        st.success("✅ `mcp-server-bigquery` (Active)")
+        st.success("✅ `mcp-server-compute` (Active)")
+    elif ecosystem_mode == "NVIDIA Omniverse":
+        st.success("✅ `mcp-server-omniverse` (Active)")
+    else:
+        st.success("✅ `flake8-linter` (Active)")
+        st.success("✅ `mypy-type-checker` (Active)")
+
+    st.markdown("### 🎨 Style Engine (RAG)")
     uploaded_file = st.file_uploader("Upload Style Guide (PDF)", type="pdf")
     
     if uploaded_file:
@@ -97,14 +180,14 @@ with st.sidebar:
     st.info("Mission: Enforce **Code Truth** and **Brand Voice**.")
 
 # --- MAIN UI ---
-st.title("⚖️ SDK Governance Agent")
-st.markdown("**Workflow:** Detect (BigQuery) $\\to$ Validate (MCP) $\\to$ Polish (Uploaded PDF RAG)")
+st.title(f"⚖️ {ecosystem_mode} Governance Agent")
+st.markdown("**Workflow:** Detect (Analytics) $\\to$ Validate (MCP) $\\to$ Polish (Uploaded PDF RAG)")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.messages.append({
         "role": "assistant", 
-        "content": "I am the Governance Agent. **Upload a PDF** to define the Style, and I will use **MCP** to validate the Logic."
+        "content": f"I am connected to the **{ecosystem_mode} Mesh**. Ready to audit?"
     })
 
 for message in st.session_state.messages:
@@ -112,7 +195,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"], unsafe_allow_html=True)
 
 # --- AGENT LOGIC ---
-if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
+if prompt := st.chat_input("Ex: 'Audit the codebase'"):
     
     if not api_key:
         st.error("⚠️ Please enter API Key")
@@ -123,68 +206,58 @@ if prompt := st.chat_input("Ex: 'Audit the Getting Started guide'"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        mcp = MCPServer()
+        mcp = MCPRouter(ecosystem_mode)
         
         with st.status("⚙️ Agent Reasoning...", expanded=True) as status:
-            st.write("🔍 Intent: `Full Audit (Logic + Style)`")
+            st.write(f"🔍 Intent: `Full Audit ({ecosystem_mode})`")
             time.sleep(0.5)
             
-            # PHASE 1: LOGIC
-            st.write("📉 **Logic Engine:** Querying BigQuery...")
-            bq = mcp.call_bigquery()
-            st.write(f"❌ Found high-error doc: `{bq['file']}`")
+            # PHASE 1: DETECTION
+            st.write("📉 **Logic Engine:** Scanning Codebase...")
+            data = mcp.detect_issues()
+            st.write(f"❌ Found issue in `{data['file']}`: {data['error']}")
             
-            bad_doc = """def create_vm():
-    # vm will be created
-    # zone is set to us-east-1
-    config = { "machineType": "n1-standard-1", "zone": "us-east-1" }
-    return compute.insert(config)"""
+            bad_code = data['bad_code']
             
-            st.write("☁️ **Logic Engine:** Validating against Live Google API...")
-            logic_errors = mcp.call_api_validator(bad_doc)
+            # PHASE 2: VALIDATION
+            st.write(f"☁️ **Logic Engine:** Validating Logic Rules...")
+            logic_errors, fixed_code = mcp.validate_and_fix(bad_code)
             for err in logic_errors:
                 st.write(err)
 
-            # PHASE 2: STYLE
-            st.write("🎨 **Style Engine:** Ingesting uploaded PDF...")
+            # PHASE 3: STYLE
+            st.write("🎨 **Style Engine:** Checking Brand Voice...")
             if uploaded_file:
-                style_context = process_uploaded_pdf(uploaded_file)
+                process_uploaded_pdf(uploaded_file)
                 st.write(f"✅ RAG Active: Analyzed PDF rules.")
                 st.write("⚠️ Detected Passive Voice violation.")
             else:
-                st.write("⚠️ No PDF uploaded. Using standard rules.")
+                st.write("⚠️ No PDF uploaded. Using standard fallback.")
             
-            status.update(label="✅ Audit Complete: Dual-Engine Fix Applied", state="complete", expanded=False)
-
-        # FIXED CODE
-        fixed_doc = """def create_vm() -> dict:
-    \"\"\"
-    Provisions a modern e2-micro instance in the US East region.
-    \"\"\"
-    # Validated against Live API
-    config = {
-        "machineType": "zones/us-east1-b/machineTypes/e2-micro",
-        "zone": "zones/us-east1-b"
-    }
-    return compute.instances().insert(body=config)"""
+            status.update(label="✅ Audit Complete: Fix Applied", state="complete", expanded=False)
 
         # VISUALS
-        diff_html = generate_diff_html(bad_doc, fixed_doc)
+        diff_html = generate_diff_html(bad_code, fixed_code)
         
-        # --- GENERATE GITHUB COMMENT (SAFER METHOD) ---
         pdf_name = uploaded_file.name if uploaded_file else 'Standard Rules'
         
-        # We build the string in parts to prevent SyntaxErrors
+        # Dynamic Table Logic
+        logic_row = ""
+        if ecosystem_mode == "Google Cloud":
+            logic_row = "| **Logic (Google MCP)** | 🔴 **Fail** | `us-east-1` invalid. Fixed to `us-east1-b`. |"
+        elif ecosystem_mode == "NVIDIA Omniverse":
+            logic_row = "| **Logic (NVIDIA MCP)** | 🔴 **Fail** | Manual Stage Open invalid. Fixed to `get_context()`. |"
+        else:
+            logic_row = "| **Logic (PEP8/MyPy)** | 🔴 **Fail** | Missing Types. Added hints & semantic names. |"
+
         header = "### 🤖 Governance Auto-Fix\n**Status:** ❌ Failed Checks (Fixed Automatically)\n"
         table = f"""
 | Governance Engine | Status | Action |
 | :--- | :--- | :--- |
-| **Logic (Google MCP)** | 🔴 **Fail** | `us-east-1` is invalid. Corrected to `us-east1-b`. |
-| **Lifecycle (Google MCP)** | ⚠️ **Warn** | `n1-standard` is legacy. Upgraded to `e2-micro`. |
-| **Style (PDF RAG)** | 🔴 **Fail** | Passive voice detected. Rewritten based on `{pdf_name}`. |
+{logic_row}
+| **Style (PDF RAG)** | 🔴 **Fail** | Passive voice rewritten based on `{pdf_name}`. |
 """
-        code_block = f"\n**Suggested Change:**\n```python\n{fixed_doc}\n```"
-        
+        code_block = f"\n**Suggested Change:**\n```python\n{fixed_code}\n```"
         github_comment = header + table + code_block
 
         st.write("---")
