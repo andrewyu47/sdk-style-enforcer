@@ -7,22 +7,35 @@ from langchain_community.document_loaders import PyPDFLoader
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Unified Governance Agent", page_icon="⚖️", layout="wide")
 
-# --- CSS FOR DIFF VIEW ---
+# --- CSS FOR DIFF VIEW (HIGH CONTRAST) ---
 st.markdown("""
 <style>
 .diff-container {
     max-height: 400px;
     overflow-y: auto;
-    border: 1px solid #444;
-    border-radius: 5px;
-    background-color: #0E1117;
-    font-family: monospace;
-    font-size: 14px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background-color: #0d1117; /* GitHub Dark Dim */
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.5;
     padding: 10px;
     margin-top: 10px;
+    white-space: pre-wrap; /* Preserves code formatting */
 }
-.diff-added { background-color: rgba(0, 255, 0, 0.2); display: block; }
-.diff-removed { background-color: rgba(255, 0, 0, 0.2); display: block; text-decoration: line-through; }
+.diff-added { 
+    background-color: rgba(46, 160, 67, 0.15); /* GitHub Green Tint */
+    color: #3fb950; /* Bright Green Text */
+    display: block;
+    width: 100%;
+}
+.diff-removed { 
+    background-color: rgba(248, 81, 73, 0.15); /* GitHub Red Tint */
+    color: #ff7b72; /* Bright Red Text */
+    display: block;
+    width: 100%;
+    text-decoration: line-through;
+}
 </style>
 """, unsafe_allow_html=True)
 
