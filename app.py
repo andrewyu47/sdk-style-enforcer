@@ -29,14 +29,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. THE GOVERNANCE ENGINE (Multi-Mode) ---
+# --- 1. THE GOVERNANCE ENGINE ---
 class GovernanceEngine:
     def __init__(self, mode):
         self.mode = mode
         self.audit_log = [] 
 
     def audit_content(self, text):
-        time.sleep(1.0)
+        time.sleep(0.8) # Slightly faster for better UX
         self.audit_log = []
         corrections = {}
         
@@ -66,27 +66,22 @@ class GovernanceEngine:
 
         # === MODE 2: NVIDIA OMNIVERSE ===
         elif self.mode == "NVIDIA Omniverse":
-            # Context Logic
             if "Usd.Stage.Open" in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "Critical", "msg": "Context: Manual Open forbidden in Kit."})
                 corrections['Usd.Stage.Open("test.usd")'] = "omni.usd.get_context().get_stage()"
                 corrections['# opens stage manually'] = "# Gets active stage context"
-            # Async Logic
             if "def make_cube" in text and "async" not in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Performance: Main thread blocking. Added async."})
                 corrections["def make_cube():"] = "async def make_cube():"
-            # Style
             if "cube is created" in text:
                 self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Voice: Passive voice rewritten."})
                 corrections["# cube is created"] = "# Asynchronously creates cube"
 
         # === MODE 3: STANDARD PYTHON ===
         elif self.mode == "Standard Python (PEP8)":
-            # Type Hints
             if "def process(x, y)" in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "Quality: Missing Type Hints."})
                 corrections["def process(x, y):"] = "def process_data(data: list, multiplier: int) -> list:"
-            # Docstrings
             if "data is processed" in text:
                 self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Docs: Missing Docstring."})
                 corrections["# data is processed"] = '"""Processes data list safely."""'
@@ -102,7 +97,7 @@ class GovernanceEngine:
 # --- 2. FILE HANDLERS & VISUALS ---
 @st.cache_resource
 def load_pdf_guide(file):
-    return 12 # Mock page count for speed
+    return 12
 
 def render_diff(original, modified):
     d = difflib.Differ()
@@ -125,14 +120,7 @@ def render_github_preview(audit_log, fixed_text):
     for item in audit_log:
         icon = "🔴" if item['severity'] == "Critical" else "⚠️"
         rows += f"| {icon} **{item['type']}** | {item['msg']} |\n"
-    
-    # Safe string construction
-    md = "### 🛡️ Governance Check\n"
-    md += "**Status:** Failed (Auto-Fixed)\n\n"
-    md += "| Type | Finding |\n| :--- | :--- |\n"
-    md += rows
-    md += "\n```python\n" + fixed_text[:200] + "...\n```"
-    return md
+    return f"### 🛡️ Governance Check\n**Status:** Failed (Auto-Fixed)\n\n| Type | Finding |\n| :--- | :--- |\n{rows}\n```python\n{fixed_text[:200]}...\n```"
 
 # --- UI LAYOUT ---
 
@@ -141,11 +129,9 @@ with st.sidebar:
     st.header("⚙️ Governance Config")
     api_key = st.text_input("OpenAI API Key", type="password")
     
-    # THE RESTORED DROPDOWN
     st.subheader("1. Target Ecosystem")
     mode = st.selectbox("Select Protocol", ["Splunk Enterprise", "NVIDIA Omniverse", "Standard Python (PEP8)"])
     
-    # Dynamic Status based on Mode
     if mode == "Splunk Enterprise":
         st.success("✅ `mcp-splunk-api` Connected")
         st.success("✅ `mcp-product-graph` Connected")
@@ -169,7 +155,7 @@ with st.sidebar:
 st.title(f"🛡️ {mode} Governance Workbench")
 st.markdown("Automated governance for **Logic**, **Security**, and **Content Standards**.")
 
-# DYNAMIC DEFAULT TEXT (Safe Strings)
+# DYNAMIC DEFAULT TEXT
 if mode == "Splunk Enterprise":
     default_text = (
         "### Connecting to Splunk\n"
@@ -190,7 +176,6 @@ if mode == "Splunk Enterprise":
         "AWS AP - Mumbai October 15, 2025\n"
         "Data is not sent to third-party LLM service providers."
     )
-
 elif mode == "NVIDIA Omniverse":
     default_text = (
         "### Creating 3D Assets\n"
@@ -203,8 +188,7 @@ elif mode == "NVIDIA Omniverse":
         "    return stage.DefinePrim(\"/Cube\", \"Cube\")\n"
         "```"
     )
-
-else: # Standard Python
+else:
     default_text = (
         "### Data Processor\n"
         "This function processes the input list.\n\n"
@@ -215,45 +199,58 @@ else: # Standard Python
         "```"
     )
 
-# TABS
-tab_input, tab_results = st.tabs(["📝 Input Draft", "📊 Audit Results"])
+# --- LAYOUT: INPUT SECTION ---
+# We use columns to keep the input side-by-side with the "Run" button meta-data
+col1, col2 = st.columns([3, 1])
 
-with tab_input:
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Source Content")
-        # key=mode ensures text box resets when dropdown changes
-        doc_input = st.text_area("Paste Draft:", value=default_text, height=400, key=mode) 
+with col1:
+    st.subheader("1. Source Draft")
+    # key=mode ensures the text box refreshes when you change the dropdown
+    doc_input = st.text_area("Paste Draft:", value=default_text, height=350, key=mode)
+
+with col2:
+    st.subheader("Protocol")
+    st.info("Ready to Audit")
     
-    with col2:
-        st.info("Ready to Audit")
-        st.markdown(f"**Active Protocols for {mode}:**")
-        if mode == "Splunk Enterprise":
-            st.markdown("* 🔍 **Facts:** Port 8089, Version Lifecycle\n* 🔐 **Security:** Token Auth Only")
-        elif mode == "NVIDIA Omniverse":
-            st.markdown("* 🔍 **Context:** No Manual Stage Open\n* ⚡ **Perf:** Async Execution Required")
-        else:
-            st.markdown("* 🔍 **Quality:** PEP8 Standards\n* 📝 **Docs:** Mandatory Docstrings")
-            
-        if st.button("🚀 Run Audit", type="primary", use_container_width=True):
-            st.session_state.run_audit = True
+    # Contextual info based on mode
+    if mode == "Splunk Enterprise":
+        st.markdown("* 🔍 **Facts:** Port 8089, Version Lifecycle\n* 🔐 **Security:** Token Auth Only")
+    elif mode == "NVIDIA Omniverse":
+        st.markdown("* 🔍 **Context:** No Manual Stage Open\n* ⚡ **Perf:** Async Execution Required")
+    else:
+        st.markdown("* 🔍 **Quality:** PEP8 Standards\n* 📝 **Docs:** Mandatory Docstrings")
+    
+    st.markdown("---")
+    # THE BUTTON
+    if st.button("🚀 Run Audit", type="primary", use_container_width=True):
+        st.session_state.run_audit = True
 
-# RESULTS
+# --- LAYOUT: RESULTS SECTION (Appears Automatically) ---
 if st.session_state.get("run_audit"):
+    
+    st.divider() # Visual separation
+    st.header("2. Audit Results")
+    
     engine = GovernanceEngine(mode)
     with st.spinner("Executing Governance Protocols..."):
         fixed_text = engine.audit_content(doc_input)
         log = engine.audit_log
     
-    with tab_results:
-        st.success("✅ Audit Complete")
-        r1, r2 = st.columns(2)
-        with r1:
-            st.markdown(render_diff(doc_input, fixed_text), unsafe_allow_html=True)
-        with r2:
-            st.subheader("Audit Log")
-            for item in log:
-                tag = f"tag-{item['type'].lower()}"
-                st.markdown(f'<div class="audit-row"><span class="{tag}">{item["type"]}</span> {item["msg"]}</div>', unsafe_allow_html=True)
-            st.divider()
+    # Results Layout
+    r1, r2 = st.columns([3, 2])
+    
+    with r1:
+        st.subheader("🔍 Visual Diff")
+        st.markdown(render_diff(doc_input, fixed_text), unsafe_allow_html=True)
+        
+    with r2:
+        st.subheader("📋 Governance Log")
+        st.success(f"✅ Auto-Fixed {len(log)} Issues")
+        
+        for item in log:
+            tag = f"tag-{item['type'].lower()}"
+            st.markdown(f'<div class="audit-row"><span class="{tag}">{item["type"]}</span> {item["msg"]}</div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        with st.expander("🤖 View GitHub CI/CD Comment"):
             st.markdown(render_github_preview(log, fixed_text))
