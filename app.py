@@ -4,13 +4,13 @@ import difflib
 from langchain_community.document_loaders import PyPDFLoader
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Splunk DocOps Workbench", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="DocOps Governance Workbench", page_icon="🛡️", layout="wide")
 
 # --- CSS FOR DIFF VIEW ---
 st.markdown("""
 <style>
 .diff-container {
-    max-height: 300px;
+    max-height: 400px;
     overflow-y: auto;
     border: 1px solid #30363d;
     border-radius: 6px;
@@ -18,32 +18,45 @@ st.markdown("""
     font-family: 'SFMono-Regular', Consolas, monospace;
     font-size: 13px;
     padding: 10px;
+    white-space: pre-wrap;
 }
 .diff-added { background-color: rgba(46, 160, 67, 0.15); color: #3fb950; display: block; }
 .diff-removed { background-color: rgba(248, 81, 73, 0.15); color: #ff7b72; display: block; text-decoration: line-through; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. LOGIC ENGINE (MCP) ---
+# --- 1. MOCK MCP SERVER (Truth Engine) ---
 class MCPServer:
     def __init__(self, ecosystem):
         self.ecosystem = ecosystem
 
-    def validate_code(self, code_snippet):
+    def validate_content(self, text_content):
+        """
+        Validates both CODE logic and TEXT facts.
+        """
         time.sleep(1.0)
         errors = []
         
-        # SPLUNK SPECIFIC LOGIC
+        # SPLUNK SPECIFIC CHECKS
         if self.ecosystem == "Splunk Enterprise":
-            if "connect(username=" in code_snippet:
-                errors.append("❌ **Security Violation (MCP):** Basic Auth (`username/password`) is deprecated in Splunk Cloud. Use `splunk_token`.")
-            if "search_oneshot" in code_snippet and "exec_mode" not in code_snippet:
-                errors.append("⚠️ **Performance (MCP):** Blocking search detected. Recommended: Async search export.")
+            # Fact Check: Port Numbers
+            if "port 80 " in text_content or "port=80" in text_content:
+                errors.append("❌ **Factual Error (MCP):** Docs claim port 80. Splunk Management Port is actually `8089`.")
+            
+            # Fact Check: Pricing/Tiers
+            if "Free Tier" in text_content:
+                errors.append("❌ **Factual Error (MCP):** Token Auth is an Enterprise-only feature. Removed 'Free Tier' claim.")
+
+            # Code Logic: Deprecated Auth
+            if "username=" in text_content:
+                errors.append("⚠️ **Security Violation (MCP):** Basic Auth is deprecated. Code updated to use `splunk_token`.")
         
-        # NVIDIA SPECIFIC LOGIC (To show range)
+        # NVIDIA SPECIFIC CHECKS
         elif self.ecosystem == "NVIDIA Omniverse":
-            if "Usd.Stage.Open" in code_snippet:
-                errors.append("❌ **Context Violation (MCP):** Never open stages manually in Kit. Use `omni.usd.get_context()`.")
+            if "synchronous" in text_content.lower():
+                errors.append("❌ **Factual Error (MCP):** Omniverse Kit is async-first. Docs falsely claim synchronous behavior.")
+            if "Usd.Stage.Open" in text_content:
+                errors.append("❌ **Context Violation (MCP):** Manual stage opening detected. Use `get_context()`.")
                 
         return errors
 
@@ -82,12 +95,11 @@ with st.sidebar:
     api_key = st.text_input("OpenAI API Key", type="password")
     
     st.markdown("### 🔌 Logic Engine (MCP)")
-    # Defaulting to Splunk to tell YOUR story
     ecosystem = st.selectbox("Target Ecosystem", ["Splunk Enterprise", "NVIDIA Omniverse"])
     
     if ecosystem == "Splunk Enterprise":
-        st.success("✅ `mcp-server-splunk` Active")
-        st.success("✅ `mcp-server-bigquery` Active")
+        st.success("✅ `mcp-server-splunk-api` Active")
+        st.success("✅ `mcp-server-product-catalog` Active")
     else:
         st.success("✅ `mcp-server-omniverse` Active")
 
@@ -99,38 +111,46 @@ with st.sidebar:
             st.success(f"✅ Loaded {pages} pages of Rules")
 
     st.divider()
-    st.info("**Mission:** Enforce **Security** (Logic) and **Voice** (Style) across SDK docs.")
+    st.info("**Mission:** Fix Broken Code and Incorrect Facts.")
 
 # --- MAIN UI ---
 st.title("🛡️ DocOps Governance Workbench")
-st.markdown("Unified governance for Developer Documentation. Validates SDK code against **Platform Reality** and **Style Standards**.")
+st.markdown("Unified governance for Developer Documentation. Validates against **Platform Reality** (Facts) and **Style Standards** (Voice).")
 
-# BAD CODE SAMPLES (The "Before" Picture)
-bad_code_splunk = """def connect_to_splunk():
-    # service object is created
-    # connection is made using password
-    service = client.connect(
+# BAD DOCUMENTATION EXAMPLES (Markdown + Code)
+bad_doc_splunk = """### Connecting to Splunk
+You can use this function on the Free Tier.
+It connects to the standard web port 80.
+
+```python
+def connect():
+    # connection is established
+    return client.connect(
         host='localhost',
-        port=8089,
-        username='admin',
+        port=80, 
+        username='admin', 
         password='changeme'
     )
-    return service"""
+```"""
 
-bad_code_nvidia = """def make_cube():
+bad_doc_nvidia = """### Creating a Cube
+This function runs in a synchronous blocking mode.
+
+```python
+def make_cube():
     # cube is created
-    # opens stage manually
     stage = Usd.Stage.Open("test.usd")
-    return stage.DefinePrim("/Cube", "Cube")"""
+    return stage.DefinePrim("/Cube", "Cube")
+```"""
 
-default_code = bad_code_splunk if ecosystem == "Splunk Enterprise" else bad_code_nvidia
+default_text = bad_doc_splunk if ecosystem == "Splunk Enterprise" else bad_doc_nvidia
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("1. Input (Non-Compliant)")
-    code_input = st.text_area("Paste Code Snippet:", value=default_code, height=300)
-    run_btn = st.button("🚀 Run DocOps Audit", type="primary", use_container_width=True)
+    st.subheader("1. Input (Draft Docs)")
+    doc_input = st.text_area("Paste Documentation Snippet:", value=default_text, height=400)
+    run_btn = st.button("🚀 Run Fact & Style Audit", type="primary", use_container_width=True)
 
 if run_btn:
     if not api_key:
@@ -140,51 +160,61 @@ if run_btn:
     mcp = MCPServer(ecosystem)
     
     with st.status("⚙️ Executing Governance Protocols...", expanded=True):
-        st.write(f"🔌 **Logic Engine:** Validating against {ecosystem} API Spec...")
-        logic_errors = mcp.validate_code(code_input)
+        st.write(f"🔌 **Logic Engine:** Verifying facts against {ecosystem} Knowledge Graph...")
+        fact_errors = mcp.validate_content(doc_input)
         
-        if logic_errors:
-            for err in logic_errors:
+        if fact_errors:
+            for err in fact_errors:
                 st.write(err)
         else:
-            st.write("✅ Logic: Valid.")
+            st.write("✅ Facts: Verified.")
             
-        st.write("🎨 **Style Engine:** Analyzing against Brand Voice...")
+        st.write("🎨 **Style Engine:** Analyzing voice...")
         if uploaded_file:
             st.write("⚠️ **Style Violation:** Passive voice detected in comments.")
         else:
-            st.write("⚠️ Using Standard Rules (No PDF uploaded).")
+            st.write("⚠️ Using Standard Rules.")
             
-    # FIXED CODE GENERATION (The "After" Picture)
-    fixed_code = ""
+    # FIXED CONTENT GENERATION
+    fixed_text = ""
     if ecosystem == "Splunk Enterprise":
-        fixed_code = """def connect_to_splunk(token: str) -> client.Service:
+        fixed_text = """### Connecting to Splunk
+This feature requires an Enterprise License.
+It connects to the management port 8089.
+
+```python
+def connect_to_splunk(token: str) -> client.Service:
     \"\"\"
     Connects to the Splunk instance using a Bearer Token.
     \"\"\"
-    # Validated against Splunk Cloud API v9.0
-    service = client.connect(
+    # Validated against Splunk Cloud API
+    return client.connect(
         host='localhost',
         port=8089,
-        splunk_token=token 
+        splunk_token=token
     )
-    return service"""
+```"""
     else:
-        fixed_code = """import omni.usd
+        fixed_text = """### Creating a Cube
+This function runs asynchronously to prevent UI blocking.
+
+```python
+import omni.usd
 async def make_cube() -> Usd.Prim:
     \"\"\"
     Asynchronously creates a cube primitive.
     \"\"\"
-    # Validated against Omniverse Kit
+    # Validated against Omniverse Context
     ctx = omni.usd.get_context()
-    return ctx.get_stage().DefinePrim("/Cube", "Cube")"""
+    return ctx.get_stage().DefinePrim("/Cube", "Cube")
+```"""
 
     with col2:
-        st.subheader("2. Output (Compliant)")
-        st.code(fixed_code, language='python')
+        st.subheader("2. Output (Verified Docs)")
+        st.code(fixed_text, language='markdown')
         st.success("✅ Audit Passed")
 
     st.divider()
-    st.subheader("🔍 DocOps Diff")
-    diff_html = generate_diff_html(code_input, fixed_code)
+    st.subheader("🔍 Governance Diff (Facts + Code)")
+    diff_html = generate_diff_html(doc_input, fixed_text)
     st.markdown(diff_html, unsafe_allow_html=True)
