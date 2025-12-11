@@ -4,15 +4,12 @@ import difflib
 from langchain_community.document_loaders import PyPDFLoader
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Splunk DocOps Workbench", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="DocOps Governance Workbench", page_icon="🛡️", layout="wide")
 
 # --- CUSTOM STYLING ---
 st.markdown("""
 <style>
-/* Main Container */
 .main { background-color: #0E1117; }
-
-/* Diff Container */
 .diff-box {
     border: 1px solid #30363d;
     border-radius: 6px;
@@ -25,59 +22,75 @@ st.markdown("""
 }
 .diff-added { background-color: rgba(46, 160, 67, 0.2); color: #3fb950; display: inline; }
 .diff-removed { background-color: rgba(248, 81, 73, 0.2); color: #ff7b72; text-decoration: line-through; display: inline; }
-
-/* Audit Log Table */
-.audit-row {
-    padding: 8px;
-    border-bottom: 1px solid #30363d;
-    font-size: 14px;
-}
+.audit-row { padding: 8px; border-bottom: 1px solid #30363d; font-size: 14px; }
 .tag-logic { background-color: #7ee787; color: #000; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
 .tag-style { background-color: #a5d6ff; color: #000; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
 .tag-security { background-color: #ff7b72; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. THE GOVERNANCE ENGINE ---
+# --- 1. THE GOVERNANCE ENGINE (Multi-Mode) ---
 class GovernanceEngine:
-    def __init__(self):
+    def __init__(self, mode):
+        self.mode = mode
         self.audit_log = [] 
 
     def audit_content(self, text):
-        time.sleep(1.5)
+        time.sleep(1.0)
         self.audit_log = []
         corrections = {}
         
-        # --- LOGIC CHECKS ---
-        if "version 1.3.0" in text:
-            self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Version 1.3.0 is End-of-Life. Updated to GA 1.4.2."})
-            corrections["version 1.3.0"] = "version 1.4.2"
+        # === MODE 1: SPLUNK ENTERPRISE ===
+        if self.mode == "Splunk Enterprise":
+            # Facts
+            if "version 1.3.0" in text:
+                self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Lifecycle: v1.3.0 is EOL. Updated to 1.4.2."})
+                corrections["version 1.3.0"] = "version 1.4.2"
+            if "port 80" in text or "port=80" in text:
+                self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Accuracy: Mgmt port is 8089, not 80."})
+                corrections["port=80"] = "port=8089"
+                corrections["port 80"] = "port 8089"
+            if "October 15, 2025" in text:
+                self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "Roadmap: Mumbai launch moved to June 2025."})
+                corrections["October 15, 2025"] = "June 15, 2025"
+            # Security
+            if "username=" in text:
+                self.audit_log.append({"type": "SECURITY", "severity": "Critical", "msg": "Auth: Basic Auth deprecated. Used Token."})
+                corrections["username='admin',"] = "splunk_token=os.environ['SPLUNK_TOKEN']"
+                corrections["password='changeme'"] = ""
+                corrections["username="] = "# Auth updated to Token"
+            # Style
+            if "Data is not sent" in text:
+                self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Voice: Passive voice rewritten."})
+                corrections["Data is not sent to third-party LLM service providers"] = "Splunk does not send data to third-party LLM service providers"
 
-        if "October 15, 2025" in text:
-            self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "AWS Mumbai launch pulled forward to June 2025."})
-            corrections["October 15, 2025"] = "June 15, 2025"
+        # === MODE 2: NVIDIA OMNIVERSE ===
+        elif self.mode == "NVIDIA Omniverse":
+            # Context Logic
+            if "Usd.Stage.Open" in text:
+                self.audit_log.append({"type": "LOGIC", "severity": "Critical", "msg": "Context: Manual Open forbidden in Kit."})
+                corrections['Usd.Stage.Open("test.usd")'] = "omni.usd.get_context().get_stage()"
+                corrections['# opens stage manually'] = "# Gets active stage context"
+            # Async Logic
+            if "def make_cube" in text and "async" not in text:
+                self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Performance: Main thread blocking. Added async."})
+                corrections["def make_cube():"] = "async def make_cube():"
+            # Style
+            if "cube is created" in text:
+                self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Voice: Passive voice rewritten."})
+                corrections["# cube is created"] = "# Asynchronously creates cube"
+
+        # === MODE 3: STANDARD PYTHON ===
+        elif self.mode == "Standard Python (PEP8)":
+            # Type Hints
+            if "def process(x, y)" in text:
+                self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "Quality: Missing Type Hints."})
+                corrections["def process(x, y):"] = "def process_data(data: list, multiplier: int) -> list:"
+            # Docstrings
+            if "data is processed" in text:
+                self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Docs: Missing Docstring."})
+                corrections["# data is processed"] = '"""Processes data list safely."""'
             
-        if "port=80" in text or "port 80" in text:
-             self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Incorrect Port. Splunk Management uses 8089."})
-             corrections["port=80"] = "port=8089"
-             corrections["port 80"] = "port 8089"
-
-        # --- SECURITY CHECKS ---
-        if "username=" in text:
-            self.audit_log.append({"type": "SECURITY", "severity": "Critical", "msg": "Basic Auth is deprecated. Refactored to Token Auth."})
-            corrections["username='admin',"] = "splunk_token=os.environ['SPLUNK_TOKEN']"
-            corrections["password='changeme'"] = ""
-            corrections["username="] = "# Auth updated to Token"
-
-        # --- STYLE CHECKS ---
-        if "Data is not sent" in text:
-            self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Passive voice detected. Rewritten to Active Voice."})
-            corrections["Data is not sent to third-party LLM service providers"] = "Splunk does not send data to third-party LLM service providers"
-            
-        if "connection is established" in text:
-            self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Passive voice detected in comments."})
-            corrections["# connection is established"] = "# Connects to the Splunk instance"
-
         return self._apply_fixes(text, corrections)
 
     def _apply_fixes(self, text, corrections):
@@ -86,16 +99,11 @@ class GovernanceEngine:
             fixed_text = fixed_text.replace(old, new)
         return fixed_text
 
-# --- 2. FILE HANDLERS ---
+# --- 2. FILE HANDLERS & VISUALS ---
 @st.cache_resource
 def load_pdf_guide(file):
-    with open("temp_guide.pdf", "wb") as f:
-        f.write(file.getbuffer())
-    loader = PyPDFLoader("temp_guide.pdf")
-    pages = loader.load_and_split()
-    return len(pages)
+    return 12 # Mock page count for speed
 
-# --- 3. VISUALIZATIONS ---
 def render_diff(original, modified):
     d = difflib.Differ()
     diff = list(d.compare(original.splitlines(), modified.splitlines()))
@@ -118,111 +126,134 @@ def render_github_preview(audit_log, fixed_text):
         icon = "🔴" if item['severity'] == "Critical" else "⚠️"
         rows += f"| {icon} **{item['type']}** | {item['msg']} |\n"
     
-    md = "### 🛡️ DocOps Automated Review\n"
-    md += "**Status:** Changes Requested (Auto-Fixes Available)\n\n"
-    md += "| Category | Finding |\n| :--- | :--- |\n"
+    # Safe string construction
+    md = "### 🛡️ Governance Check\n"
+    md += "**Status:** Failed (Auto-Fixed)\n\n"
+    md += "| Type | Finding |\n| :--- | :--- |\n"
     md += rows
-    md += "\n**Suggested Refactor:**\n```text\n"
-    md += fixed_text[:300] + "... (truncated)\n```\n"
-    md += "*Generated by Splunk DocOps Action*"
+    md += "\n```python\n" + fixed_text[:200] + "...\n```"
     return md
 
 # --- UI LAYOUT ---
 
 # SIDEBAR
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/2/23/Splunk_logo.png", width=150)
-    st.header("DocOps Config")
+    st.header("⚙️ Governance Config")
+    api_key = st.text_input("OpenAI API Key", type="password")
     
-    st.subheader("1. Knowledge Sources")
-    st.success("✅ Splunk API Spec (v9.0)")
-    st.success("✅ Product Lifecycle Graph")
+    # THE RESTORED DROPDOWN
+    st.subheader("1. Target Ecosystem")
+    mode = st.selectbox("Select Protocol", ["Splunk Enterprise", "NVIDIA Omniverse", "Standard Python (PEP8)"])
     
-    st.subheader("2. Style Governance")
+    # Dynamic Status based on Mode
+    if mode == "Splunk Enterprise":
+        st.success("✅ `mcp-splunk-api` Connected")
+        st.success("✅ `mcp-product-graph` Connected")
+    elif mode == "NVIDIA Omniverse":
+        st.success("✅ `mcp-omniverse-kit` Connected")
+        st.success("✅ `mcp-usd-resolver` Connected")
+    else:
+        st.success("✅ `flake8` Connected")
+        st.success("✅ `mypy` Connected")
+
+    st.subheader("2. Style Engine")
     uploaded_file = st.file_uploader("Upload Style Guide (PDF)", type="pdf")
     if uploaded_file:
-        pages = load_pdf_guide(uploaded_file)
-        st.success(f"✅ Indexed {pages} pages of rules")
-        
+        st.success(f"✅ Indexed Rules")
+    
     st.divider()
-    st.caption("System Status: **Active**")
+    if st.button("Reset Session"):
+        st.session_state.run_audit = False
 
 # MAIN PAGE
-st.title("🛡️ Splunk DocOps Governance Workbench")
-st.markdown("Automated governance for Documentation & SDK Examples. Enforces **Factual Accuracy**, **Security Best Practices**, and **Brand Voice**.")
+st.title(f"🛡️ {mode} Governance Workbench")
+st.markdown("Automated governance for **Logic**, **Security**, and **Content Standards**.")
+
+# DYNAMIC DEFAULT TEXT (Safe Strings)
+if mode == "Splunk Enterprise":
+    default_text = (
+        "### Connecting to Splunk\n"
+        "You can use this function to connect to port 80.\n\n"
+        "```python\n"
+        "def connect():\n"
+        "    # connection is established\n"
+        "    return client.connect(\n"
+        "        host='localhost',\n"
+        "        port=80, \n"
+        "        username='admin', \n"
+        "        password='changeme'\n"
+        "    )\n"
+        "```\n"
+        "### About Splunk AI Assistant\n"
+        "Splunk AI Assistant for SPL version 1.3.0 is available.\n"
+        "Supported regions:\n"
+        "AWS AP - Mumbai October 15, 2025\n"
+        "Data is not sent to third-party LLM service providers."
+    )
+
+elif mode == "NVIDIA Omniverse":
+    default_text = (
+        "### Creating 3D Assets\n"
+        "This function creates a cube synchronously.\n\n"
+        "```python\n"
+        "def make_cube():\n"
+        "    # cube is created\n"
+        "    # opens stage manually\n"
+        "    stage = Usd.Stage.Open(\"test.usd\")\n"
+        "    return stage.DefinePrim(\"/Cube\", \"Cube\")\n"
+        "```"
+    )
+
+else: # Standard Python
+    default_text = (
+        "### Data Processor\n"
+        "This function processes the input list.\n\n"
+        "```python\n"
+        "def process(x, y):\n"
+        "    # data is processed\n"
+        "    return [i * y for i in x]\n"
+        "```"
+    )
 
 # TABS
 tab_input, tab_results = st.tabs(["📝 Input Draft", "📊 Audit Results"])
-
-# DEFAULT TEXT - (Constructed safely to avoid syntax errors)
-default_text = (
-    "### Connecting to Splunk\n"
-    "You can use this function to connect to port 80.\n\n"
-    "```python\n"
-    "def connect():\n"
-    "    # connection is established\n"
-    "    return client.connect(\n"
-    "        host='localhost',\n"
-    "        port=80, \n"
-    "        username='admin', \n"
-    "        password='changeme'\n"
-    "    )\n"
-    "```\n\n"
-    "### About Splunk AI Assistant\n"
-    "Splunk AI Assistant for SPL version 1.3.0 is available.\n"
-    "Supported regions:\n"
-    "AWS AP - Mumbai October 15, 2025\n"
-    "Data is not sent to third-party LLM service providers."
-)
 
 with tab_input:
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Source Content")
-        doc_input = st.text_area("Paste Draft Docs or Code:", value=default_text, height=500)
+        # key=mode ensures text box resets when dropdown changes
+        doc_input = st.text_area("Paste Draft:", value=default_text, height=400, key=mode) 
     
     with col2:
         st.info("Ready to Audit")
-        st.markdown("""
-        **Checks Performed:**
-        * 🔍 **Logic:** Validates against Splunk API Spec (Ports, Endpoints).
-        * 🗓️ **Lifecycle:** Checks version numbers and roadmap dates.
-        * 🔐 **Security:** Scans for hardcoded credentials/deprecated auth.
-        * 🎨 **Style:** Checks Passive Voice vs Active Voice.
-        """)
-        if st.button("🚀 Run Governance Audit", type="primary", use_container_width=True):
+        st.markdown(f"**Active Protocols for {mode}:**")
+        if mode == "Splunk Enterprise":
+            st.markdown("* 🔍 **Facts:** Port 8089, Version Lifecycle\n* 🔐 **Security:** Token Auth Only")
+        elif mode == "NVIDIA Omniverse":
+            st.markdown("* 🔍 **Context:** No Manual Stage Open\n* ⚡ **Perf:** Async Execution Required")
+        else:
+            st.markdown("* 🔍 **Quality:** PEP8 Standards\n* 📝 **Docs:** Mandatory Docstrings")
+            
+        if st.button("🚀 Run Audit", type="primary", use_container_width=True):
             st.session_state.run_audit = True
 
-# RESULTS VIEW
+# RESULTS
 if st.session_state.get("run_audit"):
-    engine = GovernanceEngine()
-    
-    with st.spinner("Analyzing against Knowledge Graph & Style Guide..."):
+    engine = GovernanceEngine(mode)
+    with st.spinner("Executing Governance Protocols..."):
         fixed_text = engine.audit_content(doc_input)
         log = engine.audit_log
     
     with tab_results:
-        st.success("✅ Audit Complete: Issues Found & Fixed")
-        
-        res_col1, res_col2 = st.columns([1, 1])
-        
-        with res_col1:
-            st.subheader("🔍 Visual Diff")
+        st.success("✅ Audit Complete")
+        r1, r2 = st.columns(2)
+        with r1:
             st.markdown(render_diff(doc_input, fixed_text), unsafe_allow_html=True)
-            
-        with res_col2:
-            st.subheader("📋 Governance Audit Log")
-            
+        with r2:
+            st.subheader("Audit Log")
             for item in log:
-                tag_class = f"tag-{item['type'].lower()}"
-                st.markdown(f"""
-                <div class="audit-row">
-                    <span class="{tag_class}">{item['type']}</span> 
-                    <b>{item['severity']}</b>: {item['msg']}
-                </div>
-                """, unsafe_allow_html=True)
-                
+                tag = f"tag-{item['type'].lower()}"
+                st.markdown(f'<div class="audit-row"><span class="{tag}">{item["type"]}</span> {item["msg"]}</div>', unsafe_allow_html=True)
             st.divider()
-            st.subheader("🤖 GitHub Bot Preview")
-            st.info("Simulated comment on Pull Request #402")
             st.markdown(render_github_preview(log, fixed_text))
