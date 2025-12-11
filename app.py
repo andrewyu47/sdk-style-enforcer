@@ -6,7 +6,7 @@ from langchain_community.document_loaders import PyPDFLoader
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Splunk DocOps Workbench", page_icon="🛡️", layout="wide")
 
-# --- CUSTOM STYLING (High Contrast) ---
+# --- CUSTOM STYLING ---
 st.markdown("""
 <style>
 /* Main Container */
@@ -38,50 +38,38 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 1. THE GOVERNANCE ENGINE (The Brain) ---
+# --- 1. THE GOVERNANCE ENGINE ---
 class GovernanceEngine:
     def __init__(self):
-        self.audit_log = [] # Stores structured data for the report
+        self.audit_log = [] 
 
     def audit_content(self, text):
-        """
-        Scans text for Logic, Security, and Style violations based on Splunk standards.
-        """
-        time.sleep(1.5) # Simulate processing time
-        self.audit_log = [] # Reset log
+        time.sleep(1.5)
+        self.audit_log = []
         corrections = {}
         
-        # --- A. LOGIC & FACTS (Splunk Knowledge Graph) ---
-        
-        # 1. Version Check (Lifecycle)
+        # --- LOGIC CHECKS ---
         if "version 1.3.0" in text:
             self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Version 1.3.0 is End-of-Life. Updated to GA 1.4.2."})
             corrections["version 1.3.0"] = "version 1.4.2"
 
-        # 2. Date/Region Check (Roadmap)
         if "October 15, 2025" in text:
             self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "AWS Mumbai launch pulled forward to June 2025."})
             corrections["October 15, 2025"] = "June 15, 2025"
             
-        # 3. Port Numbers (Technical Accuracy)
         if "port=80" in text or "port 80" in text:
              self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Incorrect Port. Splunk Management uses 8089."})
              corrections["port=80"] = "port=8089"
              corrections["port 80"] = "port 8089"
 
-        # --- B. SECURITY PROTOCOLS ---
-        
-        # 1. Deprecated Auth (Basic Auth)
-        if "username=" in text or "password=" in text:
+        # --- SECURITY CHECKS ---
+        if "username=" in text:
             self.audit_log.append({"type": "SECURITY", "severity": "Critical", "msg": "Basic Auth is deprecated. Refactored to Token Auth."})
-            # Clean up the specific basic auth lines found in your example
             corrections["username='admin',"] = "splunk_token=os.environ['SPLUNK_TOKEN']"
             corrections["password='changeme'"] = ""
-            corrections["username="] = "# Auth updated to Token" # Cleanup for general cases
+            corrections["username="] = "# Auth updated to Token"
 
-        # --- C. STYLE & VOICE (RAG) ---
-        
-        # 1. Passive Voice (Brand)
+        # --- STYLE CHECKS ---
         if "Data is not sent" in text:
             self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Passive voice detected. Rewritten to Active Voice."})
             corrections["Data is not sent to third-party LLM service providers"] = "Splunk does not send data to third-party LLM service providers"
@@ -130,7 +118,6 @@ def render_github_preview(audit_log, fixed_text):
         icon = "🔴" if item['severity'] == "Critical" else "⚠️"
         rows += f"| {icon} **{item['type']}** | {item['msg']} |\n"
     
-    # We use a standard string here to avoid f-string syntax errors
     md = "### 🛡️ DocOps Automated Review\n"
     md += "**Status:** Changes Requested (Auto-Fixes Available)\n\n"
     md += "| Category | Finding |\n| :--- | :--- |\n"
@@ -164,11 +151,11 @@ with st.sidebar:
 st.title("🛡️ Splunk DocOps Governance Workbench")
 st.markdown("Automated governance for Documentation & SDK Examples. Enforces **Factual Accuracy**, **Security Best Practices**, and **Brand Voice**.")
 
-# TABS FOR MODES
+# TABS
 tab_input, tab_results = st.tabs(["📝 Input Draft", "📊 Audit Results"])
 
-# DEFAULT TEXT (Combined Text + Code)
-default_text = """### Connecting to Splunk
+# DEFAULT TEXT - (Broken into parts to be safe)
+part1 = """### Connecting to Splunk
 You can use this function to connect to port 80.
 
 ```python
