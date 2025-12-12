@@ -162,7 +162,7 @@ with st.sidebar:
 
 # MAIN PAGE
 st.title(f"🛡️ {mode} Governance Workbench")
-st.markdown("**Mission:** "Ensure content is Accurate, Secure, and Consistent before it ships")
+st.markdown("**Mission:** Ensure Developer Documentation is **Accurate**, **Secure**, and **Consistent** before it ships.")
 
 # DYNAMIC DEFAULT TEXT
 if mode == "Splunk Enterprise":
