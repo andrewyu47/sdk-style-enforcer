@@ -157,16 +157,12 @@ with st.sidebar:
         st.success(f"✅ Parsed {rule_count} Rules from PDF")
     
     st.divider()
-    
-    # MISSION STATEMENT
-    st.info("**Mission:**\nTo ensure Developer Documentation is **Factually Accurate**, **Secure**, and **On-Brand** before it ships.")
-
-    st.divider()
     if st.button("Reset Session"):
         st.session_state.run_audit = False
 
 # MAIN PAGE
 st.title(f"🛡️ {mode} Governance Workbench")
+st.markdown("**Mission:** Ensure Developer Documentation is **Factually Accurate**, **Secure**, and **On-Brand** before it ships.")
 
 # DYNAMIC DEFAULT TEXT
 if mode == "Splunk Enterprise":
@@ -254,7 +250,7 @@ if st.session_state.get("run_audit"):
         st.subheader("🔍 Visual Diff")
         st.markdown(render_diff(doc_input, fixed_text), unsafe_allow_html=True)
         
-        # --- NEW: FINAL CLEAN OUTPUT BOX ---
+        # FINAL CLEAN OUTPUT BOX
         st.markdown("<br>", unsafe_allow_html=True)
         st.subheader("✅ Verified Output (Copy/Paste)")
         st.text_area("Final Clean Text:", value=fixed_text, height=300, label_visibility="collapsed")
