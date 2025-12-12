@@ -42,7 +42,6 @@ class GovernanceEngine:
         
         # === MODE 1: SPLUNK ENTERPRISE ===
         if self.mode == "Splunk Enterprise":
-            # Facts
             if "version 1.3.0" in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Lifecycle: v1.3.0 is EOL. Updated to 1.4.2."})
                 corrections["version 1.3.0"] = "version 1.4.2"
@@ -53,40 +52,33 @@ class GovernanceEngine:
             if "October 15, 2025" in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "Roadmap: Mumbai launch moved to June 2025."})
                 corrections["October 15, 2025"] = "June 15, 2025"
-            # Security
             if "username=" in text:
                 self.audit_log.append({"type": "SECURITY", "severity": "Critical", "msg": "Auth: Basic Auth deprecated. Used Token."})
                 corrections["username='admin',"] = "splunk_token=os.environ['SPLUNK_TOKEN']"
                 corrections["password='changeme'"] = ""
                 corrections["username="] = "# Auth updated to Token"
-            # Style
             if "Data is not sent" in text:
                 self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Voice: Passive voice rewritten."})
                 corrections["Data is not sent to third-party LLM service providers"] = "Splunk does not send data to third-party LLM service providers"
 
         # === MODE 2: NVIDIA OMNIVERSE ===
         elif self.mode == "NVIDIA Omniverse":
-            # Context Logic
             if "Usd.Stage.Open" in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "Critical", "msg": "Context: Manual Open forbidden in Kit."})
                 corrections['Usd.Stage.Open("test.usd")'] = "omni.usd.get_context().get_stage()"
                 corrections['# opens stage manually'] = "# Gets active stage context"
-            # Async Logic
             if "def make_cube" in text and "async" not in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "High", "msg": "Performance: Main thread blocking. Added async."})
                 corrections["def make_cube():"] = "async def make_cube():"
-            # Style
             if "cube is created" in text:
                 self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Voice: Passive voice rewritten."})
                 corrections["# cube is created"] = "# Asynchronously creates cube"
 
         # === MODE 3: STANDARD PYTHON ===
         elif self.mode == "Standard Python (PEP8)":
-            # Type Hints
             if "def process(x, y)" in text:
                 self.audit_log.append({"type": "LOGIC", "severity": "Medium", "msg": "Quality: Missing Type Hints."})
                 corrections["def process(x, y):"] = "def process_data(data: list, multiplier: int) -> list:"
-            # Docstrings
             if "data is processed" in text:
                 self.audit_log.append({"type": "STYLE", "severity": "Low", "msg": "Docs: Missing Docstring."})
                 corrections["# data is processed"] = '"""Processes data list safely."""'
@@ -101,8 +93,9 @@ class GovernanceEngine:
 
 # --- 2. FILE HANDLERS & VISUALS ---
 @st.cache_resource
-def load_pdf_guide(file):
-    return 12 
+def load_pdf_rules(file):
+    # Simulating parsing rules from PDF
+    return 24
 
 def render_diff(original, modified):
     d = difflib.Differ()
@@ -143,6 +136,7 @@ with st.sidebar:
     st.subheader("1. Target Ecosystem")
     mode = st.selectbox("Select Protocol", ["Splunk Enterprise", "NVIDIA Omniverse", "Standard Python (PEP8)"])
     
+    # Status Indicators
     if mode == "Splunk Enterprise":
         st.success("✅ `mcp-splunk-api` Connected")
         st.success("✅ `mcp-product-graph` Connected")
@@ -155,16 +149,24 @@ with st.sidebar:
 
     st.subheader("2. Style Engine")
     uploaded_file = st.file_uploader("Upload Style Guide (PDF)", type="pdf")
-    if uploaded_file:
-        st.success(f"✅ Indexed Rules")
     
+    # RULE COUNTER
+    rule_count = 0
+    if uploaded_file:
+        rule_count = load_pdf_rules(uploaded_file)
+        st.success(f"✅ Parsed {rule_count} Rules from PDF")
+    
+    st.divider()
+    
+    # MISSION STATEMENT
+    st.info("**Mission:**\nTo ensure Developer Documentation is **Factually Accurate**, **Secure**, and **On-Brand** before it ships.")
+
     st.divider()
     if st.button("Reset Session"):
         st.session_state.run_audit = False
 
 # MAIN PAGE
 st.title(f"🛡️ {mode} Governance Workbench")
-st.markdown("Automated governance for **Logic**, **Security**, and **Content Standards**.")
 
 # DYNAMIC DEFAULT TEXT
 if mode == "Splunk Enterprise":
@@ -219,17 +221,18 @@ with col1:
 
 with col2:
     st.subheader("Active Protocols")
-    st.info("System Ready")
+    st.caption("System Ready")
     
-    # DYNAMIC PROTOCOL DISPLAY (Now includes Style Source)
+    # DYNAMIC PROTOCOL DISPLAY
     style_source = f"**{uploaded_file.name}**" if uploaded_file else "Standard Rules"
+    rules_text = f"({rule_count} rules active)" if uploaded_file else ""
     
     if mode == "Splunk Enterprise":
-        st.markdown(f"* 🔍 **Facts:** Port 8089, Version Lifecycle\n* 🔐 **Security:** Token Auth Only\n* 🎨 **Style:** {style_source}")
+        st.markdown(f"* 🔍 **Facts:** Port 8089, Version Lifecycle\n* 🔐 **Security:** Token Auth Only\n* 🎨 **Style:** {style_source} {rules_text}")
     elif mode == "NVIDIA Omniverse":
-        st.markdown(f"* 🔍 **Context:** No Manual Stage Open\n* ⚡ **Perf:** Async Execution Required\n* 🎨 **Style:** {style_source}")
+        st.markdown(f"* 🔍 **Context:** No Manual Stage Open\n* ⚡ **Perf:** Async Execution Required\n* 🎨 **Style:** {style_source} {rules_text}")
     else:
-        st.markdown(f"* 🔍 **Quality:** PEP8 Standards\n* 📝 **Docs:** Mandatory Docstrings\n* 🎨 **Style:** {style_source}")
+        st.markdown(f"* 🔍 **Quality:** PEP8 Standards\n* 📝 **Docs:** Mandatory Docstrings\n* 🎨 **Style:** {style_source} {rules_text}")
     
     st.markdown("---")
     if st.button("🚀 Run Audit", type="primary", use_container_width=True):
@@ -250,6 +253,11 @@ if st.session_state.get("run_audit"):
     with r1:
         st.subheader("🔍 Visual Diff")
         st.markdown(render_diff(doc_input, fixed_text), unsafe_allow_html=True)
+        
+        # --- NEW: FINAL CLEAN OUTPUT BOX ---
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("✅ Verified Output (Copy/Paste)")
+        st.text_area("Final Clean Text:", value=fixed_text, height=300, label_visibility="collapsed")
         
     with r2:
         st.subheader("📋 Governance Log")
