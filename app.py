@@ -161,8 +161,11 @@ with st.sidebar:
         st.session_state.run_audit = False
 
 # MAIN PAGE
-st.title(f"🛡️ {mode} Governance Workbench")
-st.markdown("**Mission:** Ensure Developer Documentation is **Accurate**, **Secure**, and **Consistent** before it ships.")
+st.title("🛡️ DocOps Governance Workbench")
+st.markdown("**Mission:** Ensure content is **Accurate**, **Secure**, and **Consistent** before it ships.")
+
+# INDICATOR OF CURRENT MODE
+st.markdown(f"**Active Protocol:** `{mode}`")
 
 # DYNAMIC DEFAULT TEXT
 if mode == "Splunk Enterprise":
